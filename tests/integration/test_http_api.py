@@ -1,4 +1,3 @@
-# llamator-mcp-server/tests/integration/test_http_api.py
 from __future__ import annotations
 
 import time

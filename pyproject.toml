@@ -1,4 +1,3 @@
-# llamator-mcp-server/pyproject.toml
 [tool.poetry]
 name = "llamator-mcp-server"
 version = "0.3.0"

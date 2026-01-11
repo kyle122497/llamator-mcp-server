@@ -1,4 +1,3 @@
-# team11-llamator-mcp/tests/integration/test_mcp_api.py
 from __future__ import annotations
 
 import json
@@ -76,6 +75,7 @@ def _assert_mcp_run_result_schema(payload: Any) -> None:
     - job_id: str (uuid4 hex, 32 chars)
     - artifacts_download_url: str | None (present for S3 backend)
     - aggregated: dict[str, dict[str, int]]
+    - error_notice: str | None
     """
     assert isinstance(payload, dict), f"Expected dict, got {type(payload)}"
     assert payload, "Expected non-empty MCP tool result dict."
@@ -89,14 +89,10 @@ def _assert_mcp_run_result_schema(payload: Any) -> None:
         assert isinstance(artifacts_url, str), f"Expected artifacts_download_url to be str, got {type(artifacts_url)}"
         assert artifacts_url.strip(), "Expected non-empty artifacts_download_url when provided."
 
-    err_val: Any = payload.get("error")
-    if err_val is not None:
-        if isinstance(err_val, str):
-            assert err_val.strip(), "Expected non-empty error string when provided."
-            return
-        if isinstance(err_val, dict):
-            assert err_val, "Expected non-empty error object when provided."
-            return
+    error_notice: Any = payload.get("error_notice")
+    if error_notice is not None:
+        assert isinstance(error_notice, str), f"Expected error_notice to be str, got {type(error_notice)}"
+        assert error_notice.strip(), "Expected non-empty error_notice when provided."
 
     aggregated: Any = payload.get("aggregated")
     _assert_start_testing_result_schema(aggregated)
@@ -111,11 +107,11 @@ def test_mcp_tools_list_contains_llamator_tools(mcp_client: McpJsonRpcClient, mc
 
 
 def test_mcp_create_run_returns_start_testing_result(
-    mcp_client: McpJsonRpcClient,
-    mcp_session: McpSession,
-    minimal_run_request_payload: dict[str, Any],
-    capsys: pytest.CaptureFixture[str],
-    reporter: ResponseReporter,
+        mcp_client: McpJsonRpcClient,
+        mcp_session: McpSession,
+        minimal_run_request_payload: dict[str, Any],
+        capsys: pytest.CaptureFixture[str],
+        reporter: ResponseReporter,
 ) -> None:
     tools: list[dict[str, Any]] = mcp_client.list_tools(mcp_session)
     tool_map: dict[str, dict[str, Any]] = {str(t.get("name")): t for t in tools if isinstance(t.get("name"), str)}
@@ -129,7 +125,7 @@ def test_mcp_create_run_returns_start_testing_result(
     created_fallback: dict[str, Any] | None = _extract_text_json_from_content(created_result)
 
     assert (
-        created_struct is not None or created_fallback is not None
+            created_struct is not None or created_fallback is not None
     ), f"Tool result does not contain structuredContent or JSON text content: {created_result!r}"
 
     created_payload: dict[str, Any] = created_struct or created_fallback or {}

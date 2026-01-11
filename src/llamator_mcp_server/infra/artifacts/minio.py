@@ -99,6 +99,19 @@ def _validate_endpoint_url(raw_url: str, *, field_name: str) -> ParseResult:
     return parsed
 
 
+def _now_utc() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _is_expired(last_modified: datetime | None, retention_seconds: int, now: datetime) -> bool:
+    if retention_seconds < 1:
+        return False
+    if last_modified is None:
+        return False
+    lm: datetime = last_modified if last_modified.tzinfo is not None else last_modified.replace(tzinfo=timezone.utc)
+    return lm <= (now - timedelta(seconds=int(retention_seconds)))
+
+
 @dataclass(frozen=True, slots=True)
 class MinioConfig:
     """
@@ -124,13 +137,15 @@ class MinioArtifactsStorage(ArtifactsStorage):
     """
     MinIO-based artifacts storage.
 
-    This implementation uploads each artifact file as an object and also uploads a zip archive
-    named ``ARTIFACTS_ARCHIVE_NAME``. Downloads are served via presigned URLs returned as links.
+    This implementation uploads a single zip archive named ``ARTIFACTS_ARCHIVE_NAME``.
+    Downloads are served via presigned URLs returned as links.
     """
 
-    def __init__(self, cfg: MinioConfig, *, list_max_keys: int) -> None:
+    def __init__(self, cfg: MinioConfig, *, list_max_keys: int, retention_seconds: int) -> None:
         if list_max_keys < 1:
             raise ValueError("list_max_keys must be >= 1.")
+        if retention_seconds < 1:
+            raise ValueError("retention_seconds must be >= 1.")
 
         endpoint_raw: str = str(cfg.endpoint_url).strip()
         parsed: ParseResult = _validate_endpoint_url(endpoint_raw, field_name="endpoint_url")
@@ -151,6 +166,7 @@ class MinioArtifactsStorage(ArtifactsStorage):
             raise ValueError("bucket must be non-empty.")
 
         self._list_max_keys: int = int(list_max_keys)
+        self._retention_seconds: int = int(retention_seconds)
 
         self._client: Minio = Minio(
                 endpoint=parsed.netloc,
@@ -211,7 +227,10 @@ class MinioArtifactsStorage(ArtifactsStorage):
         prefix: str = _job_prefix(job_id)
 
         def _iter() -> list[ArtifactFileRecord]:
+            now: datetime = _now_utc()
             items: list[ArtifactFileRecord] = []
+            to_delete: list[str] = []
+
             try:
                 it: Iterable = self._client.list_objects(self._bucket, prefix=prefix, recursive=True)
                 for obj in it:
@@ -221,13 +240,25 @@ class MinioArtifactsStorage(ArtifactsStorage):
                     rel: str = name[len(prefix):]
                     if not rel:
                         continue
+
+                    last_modified: datetime | None = getattr(obj, "last_modified", None)
+                    if _is_expired(last_modified, self._retention_seconds, now):
+                        to_delete.append(name)
+                        continue
+
                     size: int = int(getattr(obj, "size", 0) or 0)
-                    mtime: float = _utc_ts(getattr(obj, "last_modified", None))
+                    mtime: float = _utc_ts(last_modified)
                     items.append(ArtifactFileRecord(path=rel, size_bytes=size, mtime=mtime))
                     if len(items) >= self._list_max_keys:
                         break
             except S3Error as e:
                 raise ArtifactsStorageError(f"MinIO list_objects failed prefix={prefix!r}") from e
+
+            for key in to_delete:
+                try:
+                    self._client.remove_object(self._bucket, key)
+                except S3Error:
+                    continue
 
             items.sort(key=lambda x: x.path)
             return items
@@ -243,12 +274,20 @@ class MinioArtifactsStorage(ArtifactsStorage):
 
         def _build() -> ArtifactDownloadLink:
             try:
-                self._client.stat_object(self._bucket, key)
+                st = self._client.stat_object(self._bucket, key)
             except S3Error as e:
                 code: str = str(getattr(e, "code", "") or "")
                 if code in ("NoSuchKey", "NoSuchObject", "NoSuchBucket", "NotFound"):
                     raise FileNotFoundError("File not found")
                 raise ArtifactsStorageError(f"MinIO stat_object failed key={key!r}") from e
+
+            last_modified: datetime | None = getattr(st, "last_modified", None)
+            if _is_expired(last_modified, self._retention_seconds, _now_utc()):
+                try:
+                    self._client.remove_object(self._bucket, key)
+                except S3Error:
+                    pass
+                raise FileNotFoundError("File not found")
 
             try:
                 url: str = presign_client.presigned_get_object(
@@ -271,36 +310,44 @@ class MinioArtifactsStorage(ArtifactsStorage):
 
         prefix: str = _job_prefix(job_id)
 
-        def _upload_all() -> None:
+        def _cleanup_prefix() -> None:
+            try:
+                it: Iterable = self._client.list_objects(self._bucket, prefix=prefix, recursive=True)
+                for obj in it:
+                    name: str = str(getattr(obj, "object_name", "") or "")
+                    if not name.startswith(prefix):
+                        continue
+                    try:
+                        self._client.remove_object(self._bucket, name)
+                    except S3Error:
+                        continue
+            except S3Error as e:
+                raise ArtifactsStorageError(f"MinIO list_objects cleanup failed prefix={prefix!r}") from e
+
+        def _upload_archive(tmp_zip: Path) -> None:
             try:
                 self._client.bucket_exists(self._bucket)
             except S3Error as e:
                 raise ArtifactsStorageError(f"MinIO bucket check failed bucket={self._bucket!r}") from e
 
-            files: list[tuple[Path, str]] = _collect_files(root)
-            for abs_path, rel_posix in files:
-                key: str = f"{prefix}{_safe_posix_relpath(rel_posix)}"
-                try:
-                    self._client.fput_object(self._bucket, key, str(abs_path))
-                except S3Error as e:
-                    raise ArtifactsStorageError(f"MinIO upload failed key={key!r}") from e
+            _cleanup_prefix()
 
-            tmp_path: Path | None = None
             try:
-                fd, tmp_name = tempfile.mkstemp(prefix="llamator-artifacts-", suffix=".zip")
-                os.close(fd)
-                tmp_path = Path(tmp_name)
-                _build_zip_archive(root, tmp_path)
-
                 zip_key: str = f"{prefix}{ARTIFACTS_ARCHIVE_NAME}"
-                self._client.fput_object(self._bucket, zip_key, str(tmp_path))
+                self._client.fput_object(self._bucket, zip_key, str(tmp_zip))
             except S3Error as e:
                 raise ArtifactsStorageError(f"MinIO upload archive failed job_id={job_id!r}") from e
-            finally:
-                if tmp_path is not None:
-                    try:
-                        tmp_path.unlink(missing_ok=True)
-                    except OSError:
-                        pass
 
-        await asyncio.to_thread(_upload_all)
+        tmp_path: Path | None = None
+        try:
+            fd, tmp_name = tempfile.mkstemp(prefix="llamator-artifacts-", suffix=".zip")
+            os.close(fd)
+            tmp_path = Path(tmp_name)
+            _build_zip_archive(root, tmp_path)
+            await asyncio.to_thread(_upload_archive, tmp_path)
+        finally:
+            if tmp_path is not None:
+                try:
+                    tmp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass

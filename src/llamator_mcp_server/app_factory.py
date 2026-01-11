@@ -8,6 +8,9 @@ from typing import AsyncIterator
 from arq import create_pool
 from arq.connections import ArqRedis
 from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
+from redis.asyncio import Redis
+
 from llamator_mcp_server.api.http_routes import build_router
 from llamator_mcp_server.api.mcp_tools import build_mcp
 from llamator_mcp_server.api.middleware import _ApiKeyAsgiWrapper
@@ -20,8 +23,6 @@ from llamator_mcp_server.infra.redis import create_redis_client
 from llamator_mcp_server.infra.redis import parse_redis_settings
 from llamator_mcp_server.utils.logging import LOGGER_NAME
 from llamator_mcp_server.utils.logging import configure_logging
-from prometheus_fastapi_instrumentator import Instrumentator
-from redis.asyncio import Redis
 
 
 async def _close_arq_pool(arq_pool: ArqRedis) -> None:

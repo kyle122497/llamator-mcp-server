@@ -28,5 +28,6 @@ def create_artifacts_storage(
                     secure=settings.minio_secure,
             ),
             list_max_keys=list_max_keys,
+            retention_seconds=settings.artifacts_minio_ttl_seconds,
     )
     return storage

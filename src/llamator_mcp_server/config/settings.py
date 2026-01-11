@@ -7,12 +7,13 @@ from typing import Literal
 from urllib.parse import ParseResult
 from urllib.parse import urlparse
 
-from llamator_mcp_server.utils.env import parse_system_prompts
 from pydantic import Field
 from pydantic import field_validator
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 from pydantic_settings import SettingsConfigDict
+
+from llamator_mcp_server.utils.env import parse_system_prompts
 
 
 def _parse_system_prompts_value(v: Any) -> tuple[str, ...] | None:
@@ -88,6 +89,12 @@ class ArtifactsSettings(_SettingsBase):
 
     artifacts_root: Path = Field(default=Path("/data/artifacts"))
     artifacts_presign_expires_seconds: int = Field(default=15 * 60, ge=1)
+
+    artifacts_minio_ttl_seconds: int = Field(default=7 * 24 * 60 * 60, ge=1)
+    artifacts_local_ttl_seconds: int = Field(default=24 * 60 * 60, ge=1)
+
+    artifacts_upload_max_retries: int = Field(default=3, ge=1, le=50)
+    artifacts_upload_retry_delay_seconds: float = Field(default=1.0, ge=0.0, le=60.0)
 
 
 class MinioSettings(_SettingsBase):
@@ -183,6 +190,11 @@ class Settings(
 
     :param redis_dsn: Redis DSN used by the HTTP server and ARQ worker.
     :param artifacts_root: Root directory for job artifacts storage.
+    :param artifacts_presign_expires_seconds: Presigned URL TTL in seconds.
+    :param artifacts_minio_ttl_seconds: Retention TTL for artifacts archive stored in MinIO (seconds).
+    :param artifacts_local_ttl_seconds: Local retention TTL for job artifacts on disk (seconds).
+    :param artifacts_upload_max_retries: Max attempts to upload artifacts archive to backend.
+    :param artifacts_upload_retry_delay_seconds: Delay between upload attempts (seconds).
     :param minio_endpoint_url: MinIO endpoint URL, e.g. http://minio:9000
     :param minio_public_endpoint_url: Optional public endpoint URL used in presigned links.
     :param minio_access_key_id: MinIO access key id.

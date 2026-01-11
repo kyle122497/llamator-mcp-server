@@ -5,16 +5,14 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime
 from datetime import timezone
-from pathlib import Path
-from pathlib import PurePosixPath
 from typing import Any
 
 from arq.connections import ArqRedis
+
 from llamator_mcp_server.config.settings import Settings
 from llamator_mcp_server.domain.models import BasicTestSpec
 from llamator_mcp_server.domain.models import CustomTestSpec
 from llamator_mcp_server.domain.models import JobStatus
-from llamator_mcp_server.domain.models import LlamatorRunConfig
 from llamator_mcp_server.domain.models import LlamatorTestRunRequest
 from llamator_mcp_server.domain.models import OpenAIClientConfig
 from llamator_mcp_server.domain.models import TestParameter
@@ -120,67 +118,6 @@ def _build_judge_client(settings: Settings) -> OpenAIClientConfig:
     )
 
 
-def _resolve_artifacts_dir(settings: Settings, job_id: str, user_cfg: LlamatorRunConfig | None) -> Path:
-    """
-    Resolve a safe local artifacts directory for a job.
-
-    :param settings: Application settings.
-    :param job_id: Job identifier.
-    :param user_cfg: Optional user run configuration.
-    :return: Absolute local artifacts directory.
-    :raises ValueError: If artifacts_path attempts to escape the job directory.
-    """
-    base: Path = (settings.artifacts_root / job_id).resolve(strict=False)
-
-    if user_cfg is None or user_cfg.artifacts_path is None:
-        return base
-
-    rel: PurePosixPath = PurePosixPath(user_cfg.artifacts_path)
-    candidate: Path = (base / Path(*rel.parts)).resolve(strict=False)
-
-    if base not in candidate.parents and candidate != base:
-        raise ValueError("artifacts_path escaped job artifacts root.")
-
-    return candidate
-
-
-def _merge_run_config(
-        settings: Settings,
-        job_id: str,
-        user_cfg: LlamatorRunConfig | None,
-) -> dict[str, Any]:
-    """
-    Merge user run configuration with defaults.
-
-    :param settings: Application settings.
-    :param job_id: Job identifier.
-    :param user_cfg: Optional user config.
-    :return: Effective LLAMATOR config dict.
-    """
-    effective: dict[str, Any] = {}
-
-    enable_logging: bool = (
-        True if user_cfg is None or user_cfg.enable_logging is None else bool(user_cfg.enable_logging)
-    )
-    enable_reports: bool = (
-        False if user_cfg is None or user_cfg.enable_reports is None else bool(user_cfg.enable_reports)
-    )
-    debug_level: int = 1 if user_cfg is None or user_cfg.debug_level is None else int(user_cfg.debug_level)
-    report_language: str = (
-        settings.report_language if user_cfg is None or user_cfg.report_language is None else user_cfg.report_language
-    )
-
-    effective["enable_logging"] = enable_logging
-    effective["enable_reports"] = enable_reports
-    effective["debug_level"] = debug_level
-    effective["report_language"] = report_language
-
-    artifacts_dir: Path = _resolve_artifacts_dir(settings=settings, job_id=job_id, user_cfg=user_cfg)
-    effective["artifacts_path"] = str(artifacts_dir)
-
-    return effective
-
-
 @dataclass(frozen=True, slots=True)
 class SubmitResult:
     """
@@ -224,7 +161,6 @@ class TestRunService:
 
         attack: OpenAIClientConfig = _build_attack_client(self._settings)
         judge: OpenAIClientConfig = _build_judge_client(self._settings)
-        run_config: dict[str, Any] = _merge_run_config(self._settings, job_id, req.run_config)
 
         request_redacted: dict[str, Any] = _redact_request(req, attack=attack, judge=judge)
         await self._store.create(job_id=job_id, request_redacted=request_redacted)
@@ -236,7 +172,7 @@ class TestRunService:
             "tested_model": req.tested_model.model_dump(mode="json"),
             "judge_model": judge.model_dump(mode="json"),
             "plan": req.plan.model_dump(mode="json"),
-            "run_config": run_config,
+            "run_config": (req.run_config.model_dump(mode="json") if req.run_config is not None else None),
         }
 
         await self._arq.enqueue_job("run_llamator_job", payload, _job_id=job_id)

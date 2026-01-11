@@ -15,12 +15,12 @@ from pydantic import model_validator
 
 class JobStatus(str, Enum):
     """
-    Статус выполнения задания.
+    Job execution status.
 
-    :cvar QUEUED: Задание поставлено в очередь.
-    :cvar RUNNING: Задание выполняется worker-ом.
-    :cvar SUCCEEDED: Задание завершилось успешно.
-    :cvar FAILED: Задание завершилось ошибкой.
+    :cvar QUEUED: Job is enqueued.
+    :cvar RUNNING: Job is running in a worker.
+    :cvar SUCCEEDED: Job finished successfully.
+    :cvar FAILED: Job finished with an error.
     """
 
     QUEUED = "queued"
@@ -31,9 +31,9 @@ class JobStatus(str, Enum):
 
 class ClientKind(str, Enum):
     """
-    Тип клиента для взаимодействия с LLM.
+    LLM client type.
 
-    :cvar OPENAI: OpenAI-совместимый API.
+    :cvar OPENAI: OpenAI-compatible API.
     """
 
     OPENAI = "openai"
@@ -41,11 +41,11 @@ class ClientKind(str, Enum):
 
 class TestParameter(BaseModel):
     """
-    Параметр теста.
+    A single test parameter.
 
-    :param name: Имя параметра.
-    :param value: Значение параметра (JSON-совместимое).
-    :raises ValueError: Если имя пустое.
+    :param name: Parameter name.
+    :param value: Parameter value (JSON-compatible).
+    :raises ValueError: If name is empty.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -63,11 +63,11 @@ class TestParameter(BaseModel):
 
 class BasicTestSpec(BaseModel):
     """
-    Описание базового теста LLAMATOR.
+    LLAMATOR built-in test specification.
 
-    :param code_name: Кодовое имя атаки.
-    :param params: Параметры атаки.
-    :raises ValueError: Если code_name пустое.
+    :param code_name: Attack code name.
+    :param params: Test parameters.
+    :raises ValueError: If code_name is empty.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -85,13 +85,14 @@ class BasicTestSpec(BaseModel):
 
 class CustomTestSpec(BaseModel):
     """
-    Описание пользовательского теста (класс, доступный в окружении worker-а).
+    Custom test specification (a class importable in the worker environment).
 
-    import_path должен указывать на импортируемый класс-наследник ``llamator.attack_provider.test_base.TestBase``.
+    import_path must point to an importable class inheriting
+    ``llamator.attack_provider.test_base.TestBase``.
 
-    :param import_path: Полный путь импорта класса (например, ``llamator.attacks.some.TestClass``).
-    :param params: Параметры теста.
-    :raises ValueError: Если import_path пустой или не соответствует политике импортов.
+    :param import_path: Fully qualified import path to the test class.
+    :param params: Test parameters.
+    :raises ValueError: If import_path is empty or violates import policy.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -112,14 +113,14 @@ class CustomTestSpec(BaseModel):
 
 class LlamatorRunConfig(BaseModel):
     """
-    Конфигурация запуска LLAMATOR (параметр ``config`` функции start_testing).
+    LLAMATOR run configuration (``config`` argument for start_testing).
 
-    :param enable_logging: Включить логирование LLAMATOR.
-    :param enable_reports: Включить генерацию отчётов (xlsx/docx).
-    :param artifacts_path: Относительный путь внутри корня артефактов сервера.
-    :param debug_level: Уровень логирования LLAMATOR (0=WARNING, 1=INFO, 2=DEBUG).
-    :param report_language: Язык отчёта (en/ru).
-    :raises ValueError: При некорректных значениях.
+    :param enable_logging: Enable LLAMATOR logging.
+    :param enable_reports: Enable report generation (xlsx/docx).
+    :param artifacts_path: Relative path inside server artifacts root.
+    :param debug_level: LLAMATOR log verbosity (0=WARNING, 1=INFO, 2=DEBUG).
+    :param report_language: Report language (en/ru).
+    :raises ValueError: On invalid values.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -151,16 +152,16 @@ class LlamatorRunConfig(BaseModel):
 
 class OpenAIClientConfig(BaseModel):
     """
-    Конфигурация OpenAI-совместимого клиента для LLAMATOR.
+    OpenAI-compatible client configuration for LLAMATOR.
 
-    :param kind: Тип клиента (``openai``).
-    :param api_key: Ключ доступа.
-    :param base_url: Базовый URL OpenAI-совместимого API (например, ``http://host:port/v1``).
-    :param model: Идентификатор модели.
-    :param temperature: Температура.
-    :param system_prompts: Системные промпты.
-    :param model_description: Описание модели.
-    :raises ValueError: При некорректных значениях.
+    :param kind: Client kind (``openai``).
+    :param api_key: Optional API key.
+    :param base_url: OpenAI-compatible base URL (e.g. http://host:port/v1).
+    :param model: Model identifier.
+    :param temperature: Sampling temperature.
+    :param system_prompts: Optional system prompts.
+    :param model_description: Optional model description.
+    :raises ValueError: On invalid values.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -201,13 +202,13 @@ class OpenAIClientConfig(BaseModel):
 
 class TestPlan(BaseModel):
     """
-    План тестирования LLAMATOR.
+    LLAMATOR test plan.
 
-    :param preset_name: Имя встроенного набора тестов LLAMATOR (например, ``all``, ``rus``, ``owasp:llm01``).
-    :param num_threads: Число потоков для параллельного тестирования.
-    :param basic_tests: Явный список базовых тестов.
-    :param custom_tests: Явный список пользовательских тестов (по import_path).
-    :raises ValueError: При некорректной комбинации параметров.
+    :param preset_name: Built-in preset name (e.g. ``all``, ``rus``, ``owasp:llm01``).
+    :param num_threads: Number of parallel threads.
+    :param basic_tests: Explicit basic tests list.
+    :param custom_tests: Explicit custom tests list (by import_path).
+    :raises ValueError: On invalid combinations.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -227,12 +228,12 @@ class TestPlan(BaseModel):
 
 class LlamatorTestRunRequest(BaseModel):
     """
-    Запрос на запуск тестирования определённого LLM endpoint-а через LLAMATOR.
+    Request payload for starting LLAMATOR tests against an LLM endpoint.
 
-    :param tested_model: Конфигурация тестируемой модели.
-    :param run_config: Конфигурация LLAMATOR запуска (опционально).
-    :param plan: План тестирования.
-    :raises ValueError: При некорректных данных.
+    :param tested_model: Tested model configuration.
+    :param run_config: Optional LLAMATOR run configuration.
+    :param plan: Test plan.
+    :raises ValueError: On invalid data.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -243,11 +244,11 @@ class LlamatorTestRunRequest(BaseModel):
 
 class LlamatorTestRunResponse(BaseModel):
     """
-    Ответ на запрос создания задания.
+    Response payload for job creation.
 
-    :param job_id: Идентификатор задания.
-    :param status: Текущий статус.
-    :param created_at: Время создания.
+    :param job_id: Job identifier.
+    :param status: Current job status.
+    :param created_at: Job creation time.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -258,11 +259,11 @@ class LlamatorTestRunResponse(BaseModel):
 
 class LlamatorJobError(BaseModel):
     """
-    Ошибка выполнения задания.
+    Job execution error details.
 
-    :param error_type: Тип исключения.
-    :param message: Сообщение.
-    :param occurred_at: Время фиксации ошибки.
+    :param error_type: Exception type name.
+    :param message: Exception message.
+    :param occurred_at: Error timestamp.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -273,10 +274,10 @@ class LlamatorJobError(BaseModel):
 
 class LlamatorJobResult(BaseModel):
     """
-    Результат выполнения LLAMATOR.
+    Job execution result.
 
-    :param aggregated: Агрегированные результаты по атакам.
-    :param finished_at: Время завершения.
+    :param aggregated: Aggregated metrics by attacks.
+    :param finished_at: Completion timestamp.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -286,16 +287,16 @@ class LlamatorJobResult(BaseModel):
 
 class LlamatorJobInfo(BaseModel):
     """
-    Состояние задания.
+    Job state.
 
-    :param job_id: Идентификатор задания.
-    :param status: Статус.
-    :param created_at: Время создания.
-    :param updated_at: Время последнего обновления.
-    :param request: Запрос (с редактированными секретами).
-    :param result: Результат (если есть).
-    :param error: Ошибка (если есть).
-    :param error_notice: Notification message about execution error (if any).
+    :param job_id: Job identifier.
+    :param status: Job status.
+    :param created_at: Creation timestamp.
+    :param updated_at: Last update timestamp.
+    :param request: Request payload with redacted secrets.
+    :param result: Result payload (if any).
+    :param error: Error payload (if any).
+    :param error_notice: A user-facing error message (if any).
     """
 
     model_config = ConfigDict(frozen=True)

@@ -7,12 +7,12 @@ from typing import Callable
 
 class _ApiKeyAsgiWrapper:
     """
-    ASGI-обёртка для защиты приложений по заголовку X-API-Key.
+    ASGI wrapper protecting HTTP requests with the X-API-Key header.
 
-    Если ключ пустой, проверка отключена.
+    If the configured key is empty, authentication is disabled.
 
-    :param app: Внутреннее ASGI приложение.
-    :param api_key: Ожидаемое значение ключа.
+    :param app: Inner ASGI application.
+    :param api_key: Expected API key value.
     """
 
     def __init__(self, app: Callable, api_key: str) -> None:

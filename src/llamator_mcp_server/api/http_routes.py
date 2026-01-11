@@ -25,12 +25,6 @@ from redis.asyncio import Redis
 
 from .security import require_api_key
 
-_API_KEY_SCHEME: APIKeyHeader = APIKeyHeader(
-        name="X-API-Key",
-        auto_error=False,
-        scheme_name="McpApiKey",
-)
-
 
 class _ApiKeyDependency:
     """
@@ -45,7 +39,23 @@ class _ApiKeyDependency:
     def __init__(self, settings: Settings) -> None:
         self._settings: Settings = settings
 
-    async def __call__(self, x_api_key: str | None = Security(_API_KEY_SCHEME)) -> None:
+    async def __call__(
+            self,
+            x_api_key: str | None = Security(
+                    APIKeyHeader(
+                            name="X-API-Key",
+                            auto_error=False,
+                            scheme_name="McpApiKey",
+                    )
+            ),
+    ) -> None:
+        """
+        Validate the API key provided via the X-API-Key header.
+
+        :param x_api_key: Request header value.
+        :return: None.
+        :raises HTTPException: If API key is configured and does not match.
+        """
         await require_api_key(settings=self._settings, x_api_key=x_api_key)
 
 
@@ -57,14 +67,14 @@ def build_router(
         artifacts: ArtifactsStorage,
 ) -> APIRouter:
     """
-    Построить HTTP роутер API.
+    Build HTTP API router.
 
-    :param settings: Настройки приложения.
-    :param redis: Redis-клиент.
+    :param settings: Application settings.
+    :param redis: Redis client.
     :param arq: ARQ pool.
-    :param logger: Логгер.
-    :param artifacts: Backend хранения артефактов.
-    :return: Роутер FastAPI.
+    :param logger: Logger.
+    :param artifacts: Artifacts storage backend.
+    :return: FastAPI router.
     """
     root_router: APIRouter = APIRouter()
 
@@ -79,20 +89,20 @@ def build_router(
     @public_router.get("/health", response_model=HealthResponse)
     async def health() -> HealthResponse:
         """
-        Проверка здоровья сервиса.
+        Service healthcheck endpoint.
 
-        :return: Статус сервера.
+        :return: HealthResponse.
         """
         return HealthResponse(status="ok")
 
     @protected_router.post("/v1/tests/runs", response_model=LlamatorTestRunResponse)
     async def create_run(req: LlamatorTestRunRequest) -> LlamatorTestRunResponse:
         """
-        Создать задание на тестирование.
+        Create a test run job.
 
-        :param req: Запрос запуска.
-        :return: Ответ с job_id.
-        :raises HTTPException: При ошибке валидации входных данных.
+        :param req: Run request payload.
+        :return: LlamatorTestRunResponse containing job_id.
+        :raises HTTPException: On input validation error.
         """
         try:
             validate_test_specs(req.plan.basic_tests, req.plan.custom_tests)
@@ -105,11 +115,11 @@ def build_router(
     @protected_router.get("/v1/tests/runs/{job_id}", response_model=LlamatorJobInfo)
     async def get_run(job_id: str) -> LlamatorJobInfo:
         """
-        Получить состояние задания.
+        Get job state by id.
 
-        :param job_id: Идентификатор задания.
-        :return: Состояние задания.
-        :raises HTTPException: Если задание не найдено.
+        :param job_id: Job identifier.
+        :return: LlamatorJobInfo.
+        :raises HTTPException: If job is not found.
         """
         try:
             return await store.get(job_id)
@@ -119,11 +129,11 @@ def build_router(
     @protected_router.get("/v1/tests/runs/{job_id}/artifacts", response_model=ArtifactsListResponse)
     async def list_artifacts(job_id: str) -> ArtifactsListResponse:
         """
-        Получить список файлов артефактов по заданию.
+        List artifact files for a job.
 
-        :param job_id: Идентификатор задания.
-        :return: Список файлов (путь, размер, mtime).
-        :raises HTTPException: Если задание не найдено или backend артефактов недоступен.
+        :param job_id: Job identifier.
+        :return: ArtifactsListResponse with file metadata list.
+        :raises HTTPException: If job is not found or artifacts backend is unavailable.
         """
         try:
             await store.get(job_id)
@@ -153,13 +163,15 @@ def build_router(
     )
     async def download_artifact(job_id: str, path: str) -> ArtifactDownloadResponse:
         """
-        Скачать конкретный файл артефакта.
+        Resolve a temporary download link for a specific artifact file.
 
-        :param job_id: Идентификатор задания.
-        :param path: Относительный путь файла внутри артефактов задания.
-        :return: ArtifactDownloadResponse с временной ссылкой на скачивание.
-        :raises HTTPException: Если задание/файл не найден, путь небезопасен или backend артефактов недоступен.
-        :raises RuntimeError: Если backend вернул некорректную цель загрузки.
+        This endpoint always returns HTTP 200 with a JSON body containing
+        the presigned URL (no 307 redirects).
+
+        :param job_id: Job identifier.
+        :param path: Relative artifact path inside the job prefix.
+        :return: ArtifactDownloadResponse with a temporary download URL.
+        :raises HTTPException: If job/file is not found, path is unsafe, or backend is unavailable.
         """
         try:
             await store.get(job_id)

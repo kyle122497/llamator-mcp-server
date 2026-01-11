@@ -6,14 +6,14 @@ from llamator_mcp_server.config.settings import Settings
 
 async def require_api_key(settings: Settings, x_api_key: str | None) -> None:
     """
-    Проверить доступ по API-ключу.
+    Enforce API key access control.
 
-    Если в настройках не задан ``api_key``, проверка отключена.
+    If ``settings.api_key`` is empty, authentication is disabled.
 
-    :param settings: Настройки приложения.
-    :param x_api_key: Значение заголовка ``X-API-Key``.
-    :return: None
-    :raises HTTPException: Если ключ задан и не совпадает.
+    :param settings: Application settings.
+    :param x_api_key: Value of the ``X-API-Key`` header.
+    :return: None.
+    :raises HTTPException: If a key is configured and does not match.
     """
     expected: str | None = settings.api_key
     if expected is None or expected == "":

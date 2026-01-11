@@ -8,21 +8,23 @@ from pathlib import Path
 from typing import Any
 
 import llamator
-from llamator_mcp_server.domain.models import OpenAIClientConfig, TestParameter, TestPlan
+from llamator_mcp_server.domain.models import OpenAIClientConfig
+from llamator_mcp_server.domain.models import TestParameter
+from llamator_mcp_server.domain.models import TestPlan
 
 
 @dataclass(frozen=True, slots=True)
 class ResolvedRun:
     """
-    Полностью разрешённая конфигурация запуска worker-а.
+    Fully resolved worker run configuration.
 
-    :param job_id: Идентификатор задания.
-    :param attack_model: Конфигурация модели-атакера.
-    :param tested_model: Конфигурация тестируемой модели.
-    :param judge_model: Конфигурация модели-судьи (может быть None).
-    :param plan: План тестирования.
-    :param run_config: Конфигурация LLAMATOR.
-    :param artifacts_root: Корень артефактов для данного job_id.
+    :param job_id: Job identifier.
+    :param attack_model: Attack model configuration.
+    :param tested_model: Tested model configuration.
+    :param judge_model: Judge model configuration.
+    :param plan: Test plan.
+    :param run_config: LLAMATOR config dict.
+    :param artifacts_root: Local artifacts root for this job.
     """
 
     job_id: str
@@ -35,23 +37,41 @@ class ResolvedRun:
 
 
 def _params_to_dict(params: tuple[TestParameter, ...]) -> dict[str, Any]:
+    """
+    Convert typed parameters into a dict.
+
+    :param params: Parameters tuple.
+    :return: Dict representation.
+    """
     return {p.name: p.value for p in params}
 
 
 def _build_client(cfg: OpenAIClientConfig) -> Any:
+    """
+    Build a LLAMATOR OpenAI client instance.
+
+    :param cfg: OpenAIClientConfig.
+    :return: LLAMATOR client instance.
+    """
     api_key: str = cfg.api_key or ""
     temperature: float = cfg.temperature if cfg.temperature is not None else 0.1
     return llamator.ClientOpenAI(
-        api_key=api_key,
-        base_url=str(cfg.base_url),
-        model=cfg.model,
-        temperature=temperature,
-        system_prompts=list(cfg.system_prompts) if cfg.system_prompts is not None else None,
-        model_description=cfg.model_description,
+            api_key=api_key,
+            base_url=str(cfg.base_url),
+            model=cfg.model,
+            temperature=temperature,
+            system_prompts=list(cfg.system_prompts) if cfg.system_prompts is not None else None,
+            model_description=cfg.model_description,
     )
 
 
 def _resolve_basic_tests(plan: TestPlan) -> list[tuple[str, dict[str, Any]]] | None:
+    """
+    Resolve built-in tests from preset_name and explicit basic tests.
+
+    :param plan: Test plan.
+    :return: List of (code_name, params) pairs or None.
+    """
     tests: list[tuple[str, dict[str, Any]]] = []
 
     if plan.preset_name is not None:
@@ -66,6 +86,13 @@ def _resolve_basic_tests(plan: TestPlan) -> list[tuple[str, dict[str, Any]]] | N
 
 
 def _import_custom_test(import_path: str) -> type:
+    """
+    Import a test class by a fully qualified import path.
+
+    :param import_path: Module path + class name.
+    :return: Imported class.
+    :raises ValueError: If the path is invalid or does not point to a class.
+    """
     module_name, _, class_name = import_path.rpartition(".")
     if not module_name or not class_name:
         raise ValueError("import_path must be a fully-qualified path to a class.")
@@ -77,6 +104,12 @@ def _import_custom_test(import_path: str) -> type:
 
 
 def _resolve_custom_tests(plan: TestPlan) -> list[tuple[type, dict[str, Any]]] | None:
+    """
+    Resolve custom tests from import_path specs.
+
+    :param plan: Test plan.
+    :return: List of (class, params) pairs or None.
+    """
     if plan.custom_tests is None:
         return None
 
@@ -89,9 +122,9 @@ def _resolve_custom_tests(plan: TestPlan) -> list[tuple[type, dict[str, Any]]] |
 
 class LlamatorRunner:
     """
-    Исполнитель тестов LLAMATOR (вызывается worker-ом).
+    LLAMATOR tests executor (called by the worker).
 
-    :param logger: Логгер.
+    :param logger: Logger.
     """
 
     def __init__(self, logger: logging.Logger) -> None:
@@ -99,11 +132,11 @@ class LlamatorRunner:
 
     def run(self, resolved: ResolvedRun) -> dict[str, dict[str, int]]:
         """
-        Выполнить тестирование LLAMATOR.
+        Run LLAMATOR tests.
 
-        :param resolved: Полностью разрешённая конфигурация.
-        :return: Агрегированные результаты LLAMATOR.
-        :raises Exception: Любая ошибка LLAMATOR/клиента, не обработанная ниже.
+        :param resolved: Fully resolved run configuration.
+        :return: Aggregated LLAMATOR results.
+        :raises Exception: Propagates any LLAMATOR/client errors not handled upstream.
         """
         resolved.artifacts_root.mkdir(parents=True, exist_ok=True)
 
@@ -118,11 +151,11 @@ class LlamatorRunner:
         self._logger.info(f"Starting LLAMATOR run for job_id={resolved.job_id}")
 
         return llamator.start_testing(
-            attack_model=attack_model,
-            tested_model=tested_model,
-            config=resolved.run_config,
-            judge_model=judge_model,
-            num_threads=num_threads,
-            basic_tests=basic_tests,
-            custom_tests=custom_tests,
+                attack_model=attack_model,
+                tested_model=tested_model,
+                config=resolved.run_config,
+                judge_model=judge_model,
+                num_threads=num_threads,
+                basic_tests=basic_tests,
+                custom_tests=custom_tests,
         )

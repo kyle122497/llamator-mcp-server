@@ -12,6 +12,7 @@ from llamator_mcp_server.api.http_routes import build_router
 from llamator_mcp_server.api.mcp_tools import build_mcp
 from llamator_mcp_server.api.middleware import _ApiKeyAsgiWrapper
 from llamator_mcp_server.api.middleware import _McpSseToJsonWrapper
+from llamator_mcp_server.api.openapi import build_openapi_schema
 from llamator_mcp_server.config.settings import settings
 from llamator_mcp_server.infra.artifacts import MinioArtifactsStorage
 from llamator_mcp_server.infra.artifacts import create_artifacts_storage
@@ -24,18 +25,30 @@ from redis.asyncio import Redis
 
 
 async def _close_arq_pool(arq_pool: ArqRedis) -> None:
+    """
+    Close ARQ redis pool.
+
+    :param arq_pool: ARQ pool instance.
+    :return: None.
+    """
     await arq_pool.close()
 
 
 async def _close_redis_client(redis: Redis) -> None:
+    """
+    Close Redis client.
+
+    :param redis: Redis client instance.
+    :return: None.
+    """
     await redis.aclose()
 
 
 def create_app() -> FastAPI:
     """
-    Создать приложение FastAPI.
+    Create the FastAPI application instance.
 
-    :return: Экземпляр FastAPI.
+    :return: FastAPI app.
     """
 
     @asynccontextmanager
@@ -87,6 +100,17 @@ def create_app() -> FastAPI:
             lifespan=lifespan,
             swagger_ui_parameters={"persistAuthorization": True},
     )
+
+    def custom_openapi() -> dict[str, object]:
+        """
+        Build and cache OpenAPI schema with API-key security scheme.
+
+        :return: OpenAPI schema dict.
+        """
+        return build_openapi_schema(app, scheme_name="McpApiKey",
+                                    api_key_header_name="X-API-Key")  # type: ignore[return-value]
+
+    app.openapi = custom_openapi  # type: ignore[assignment]
 
     # Prometheus metrics at /metrics
     Instrumentator().instrument(app).expose(app)

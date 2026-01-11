@@ -13,10 +13,22 @@ from redis.asyncio import Redis
 
 
 def _utcnow() -> datetime:
+    """
+    Return the current UTC time.
+
+    :return: Current datetime in UTC.
+    """
     return datetime.now(timezone.utc)
 
 
 def _build_error_notice(error_type: str, message: str) -> str:
+    """
+    Build a compact user-facing error notice.
+
+    :param error_type: Exception type name.
+    :param message: Exception message.
+    :return: Formatted notice string.
+    """
     msg: str = str(message)
     if msg:
         return f"{error_type}: {msg}"
@@ -25,10 +37,10 @@ def _build_error_notice(error_type: str, message: str) -> str:
 
 class JobStore:
     """
-    Хранилище состояния заданий на базе Redis.
+    Redis-backed job state store.
 
-    :param redis: Redis-клиент.
-    :param ttl_seconds: TTL ключей заданий.
+    :param redis: Redis client.
+    :param ttl_seconds: Key TTL in seconds.
     """
 
     def __init__(self, redis: Redis, ttl_seconds: int) -> None:
@@ -37,34 +49,34 @@ class JobStore:
 
     async def create(self, job_id: str, request_redacted: dict[str, object]) -> LlamatorJobInfo:
         """
-        Создать запись задания.
+        Create a job record.
 
-        :param job_id: Идентификатор задания.
-        :param request_redacted: Запрос с редактированными секретами.
-        :return: Состояние задания.
+        :param job_id: Job identifier.
+        :param request_redacted: Request payload with redacted secrets.
+        :return: LlamatorJobInfo.
         """
         now: datetime = _utcnow()
         info: LlamatorJobInfo = LlamatorJobInfo(
-            job_id=job_id,
-            status=JobStatus.QUEUED,
-            created_at=now,
-            updated_at=now,
-            request=request_redacted,
-            result=None,
-            error=None,
-            error_notice=None,
+                job_id=job_id,
+                status=JobStatus.QUEUED,
+                created_at=now,
+                updated_at=now,
+                request=request_redacted,
+                result=None,
+                error=None,
+                error_notice=None,
         )
         await self._set(job_id, info)
         return info
 
     async def update_status(self, job_id: str, status: JobStatus) -> None:
         """
-        Обновить статус задания.
+        Update job status.
 
-        :param job_id: Идентификатор задания.
-        :param status: Новый статус.
-        :return: None
-        :raises KeyError: Если задание не найдено.
+        :param job_id: Job identifier.
+        :param status: New status.
+        :return: None.
+        :raises KeyError: If job does not exist.
         """
         info: LlamatorJobInfo = await self.get(job_id)
         updated: LlamatorJobInfo = info.model_copy(update={"status": status, "updated_at": _utcnow()})
@@ -72,56 +84,56 @@ class JobStore:
 
     async def set_result(self, job_id: str, aggregated: dict[str, dict[str, int]]) -> None:
         """
-        Сохранить результат выполнения задания.
+        Persist job successful result.
 
-        :param job_id: Идентификатор задания.
-        :param aggregated: Агрегированные результаты.
-        :return: None
-        :raises KeyError: Если задание не найдено.
+        :param job_id: Job identifier.
+        :param aggregated: Aggregated metrics.
+        :return: None.
+        :raises KeyError: If job does not exist.
         """
         info: LlamatorJobInfo = await self.get(job_id)
         result: LlamatorJobResult = LlamatorJobResult(aggregated=aggregated, finished_at=_utcnow())
         updated: LlamatorJobInfo = info.model_copy(
-            update={
-                "status": JobStatus.SUCCEEDED,
-                "updated_at": _utcnow(),
-                "result": result,
-                "error": None,
-                "error_notice": None,
-            }
+                update={
+                    "status": JobStatus.SUCCEEDED,
+                    "updated_at": _utcnow(),
+                    "result": result,
+                    "error": None,
+                    "error_notice": None,
+                }
         )
         await self._set(job_id, updated)
 
     async def set_error(self, job_id: str, error_type: str, message: str) -> None:
         """
-        Сохранить ошибку выполнения задания.
+        Persist job error result.
 
-        :param job_id: Идентификатор задания.
-        :param error_type: Тип исключения.
-        :param message: Сообщение.
-        :return: None
-        :raises KeyError: Если задание не найдено.
+        :param job_id: Job identifier.
+        :param error_type: Exception type name.
+        :param message: Exception message.
+        :return: None.
+        :raises KeyError: If job does not exist.
         """
         info: LlamatorJobInfo = await self.get(job_id)
         error: LlamatorJobError = LlamatorJobError(error_type=error_type, message=message, occurred_at=_utcnow())
         error_notice: str = _build_error_notice(error_type=error_type, message=message)
         updated: LlamatorJobInfo = info.model_copy(
-            update={
-                "status": JobStatus.FAILED,
-                "updated_at": _utcnow(),
-                "error": error,
-                "error_notice": error_notice,
-            }
+                update={
+                    "status": JobStatus.FAILED,
+                    "updated_at": _utcnow(),
+                    "error": error,
+                    "error_notice": error_notice,
+                }
         )
         await self._set(job_id, updated)
 
     async def get(self, job_id: str) -> LlamatorJobInfo:
         """
-        Получить состояние задания.
+        Get job state by id.
 
-        :param job_id: Идентификатор задания.
-        :return: Состояние задания.
-        :raises KeyError: Если задание не найдено.
+        :param job_id: Job identifier.
+        :return: LlamatorJobInfo.
+        :raises KeyError: If job does not exist.
         """
         key: str = self._key(job_id)
         raw: str | None = await self._redis.get(key)
@@ -132,7 +144,11 @@ class JobStore:
 
     async def _set(self, job_id: str, info: LlamatorJobInfo) -> None:
         """
-        Внутренний метод: сохранить состояние задания в Redis.
+        Persist job state to Redis.
+
+        :param job_id: Job identifier.
+        :param info: LlamatorJobInfo to persist.
+        :return: None.
         """
         key: str = self._key(job_id)
         raw: str = info.model_dump_json()
@@ -140,4 +156,10 @@ class JobStore:
 
     @staticmethod
     def _key(job_id: str) -> str:
+        """
+        Build Redis key for a job.
+
+        :param job_id: Job identifier.
+        :return: Redis key string.
+        """
         return f"llamator:job:{job_id}"

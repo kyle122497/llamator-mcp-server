@@ -29,28 +29,51 @@ from pydantic import TypeAdapter
 
 
 def _utcnow() -> datetime:
+    """
+    Return the current UTC time.
+
+    :return: Current datetime in UTC.
+    """
     return datetime.now(timezone.utc)
 
 
-_CLIENT_CONFIG_ADAPTER: TypeAdapter[Any] = TypeAdapter(OpenAIClientConfig)
-_START_TESTING_RESULT_ADAPTER: TypeAdapter[Any] = TypeAdapter(dict[str, dict[str, int]])
-
-
 def _validate_client_config(val: Any) -> OpenAIClientConfig:
+    """
+    Validate and parse an OpenAIClientConfig from an untyped payload.
+
+    :param val: Raw payload value.
+    :return: Parsed OpenAIClientConfig.
+    :raises ValueError: If payload is not a dict or schema validation fails.
+    """
     if not isinstance(val, dict):
         raise ValueError("ClientConfig payload must be an object.")
-    parsed: Any = _CLIENT_CONFIG_ADAPTER.validate_python(val)
+    adapter: TypeAdapter[Any] = TypeAdapter(OpenAIClientConfig)
+    parsed: Any = adapter.validate_python(val)
     return parsed  # type: ignore[return-value]
 
 
 def _validate_start_testing_result(val: Any) -> dict[str, dict[str, int]]:
+    """
+    Validate and parse LLAMATOR start_testing result payload.
+
+    :param val: Raw payload value.
+    :return: Parsed result.
+    :raises ValueError: If payload is not a dict or schema validation fails.
+    """
     if not isinstance(val, dict):
         raise ValueError("start_testing result must be an object.")
-    parsed: Any = _START_TESTING_RESULT_ADAPTER.validate_python(val)
+    adapter: TypeAdapter[Any] = TypeAdapter(dict[str, dict[str, int]])
+    parsed: Any = adapter.validate_python(val)
     return parsed  # type: ignore[return-value]
 
 
 def _is_empty_aggregated_result(aggregated: dict[str, dict[str, int]]) -> bool:
+    """
+    Check whether aggregated result is empty.
+
+    :param aggregated: Aggregated result dict.
+    :return: True if empty.
+    """
     return not aggregated
 
 
@@ -70,6 +93,12 @@ class _ExecutionContext:
 
     @classmethod
     def from_ctx(cls, ctx: dict[str, Any]) -> "_ExecutionContext":
+        """
+        Build _ExecutionContext from ARQ ctx dict.
+
+        :param ctx: ARQ worker context dict.
+        :return: _ExecutionContext.
+        """
         return cls(
                 settings=ctx["settings"],
                 logger=ctx["logger"],
@@ -94,6 +123,14 @@ class _RunInputs:
 
     @classmethod
     def from_payload(cls, job_id: str, payload: dict[str, Any]) -> "_RunInputs":
+        """
+        Parse and validate inputs from a job payload.
+
+        :param job_id: Job identifier.
+        :param payload: Job payload dict.
+        :return: _RunInputs.
+        :raises ValueError: If schema validation fails.
+        """
         attack_model: OpenAIClientConfig = _validate_client_config(payload["attack_model"])
         tested_model: OpenAIClientConfig = _validate_client_config(payload["tested_model"])
         judge_model: OpenAIClientConfig = _validate_client_config(payload["judge_model"])
@@ -112,6 +149,11 @@ class _RunInputs:
         )
 
     def to_resolved_run(self) -> ResolvedRun:
+        """
+        Convert inputs into ResolvedRun.
+
+        :return: ResolvedRun.
+        """
         return ResolvedRun(
                 job_id=self.job_id,
                 attack_model=self.attack_model,
@@ -168,7 +210,7 @@ class _ArtifactsLifecycle:
         Remove local artifacts directory after a successful upload.
 
         :param uploaded: Indicates whether upload succeeded.
-        :return: None
+        :return: None.
         """
         if not uploaded:
             return
@@ -180,8 +222,7 @@ class _ArtifactsLifecycle:
             return
         except Exception as exc:
             self._logger.warning(
-                    f"Worker job_id={self._job_id} status=artifacts_local_cleanup_failed "
-                    f"error={type(exc).__name__}: {exc}"
+                    f"Worker job_id={self._job_id} status=artifacts_local_cleanup_failed error={type(exc).__name__}: {exc}"
             )
 
 
@@ -196,6 +237,13 @@ class _JobExecutor:
         self._artifacts: ArtifactsStorage = exec_ctx.artifacts
 
     async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
+        """
+        Execute a single job payload.
+
+        :param payload: Job payload dict.
+        :return: Result dict containing job_id, aggregated and finished_at.
+        :raises Exception: Propagates execution error after persisting job state.
+        """
         job_id: str = str(payload["job_id"])
 
         await self._store.update_status(job_id, JobStatus.RUNNING)
@@ -247,6 +295,12 @@ class _JobExecutor:
 
 
 async def worker_startup(ctx: dict[str, Any]) -> None:
+    """
+    ARQ worker startup hook.
+
+    :param ctx: ARQ worker context dict.
+    :return: None.
+    """
     configure_logging(settings.log_level)
     logger: logging.Logger = logging.getLogger(LOGGER_NAME)
 
@@ -274,6 +328,12 @@ async def worker_startup(ctx: dict[str, Any]) -> None:
 
 
 async def worker_shutdown(ctx: dict[str, Any]) -> None:
+    """
+    ARQ worker shutdown hook.
+
+    :param ctx: ARQ worker context dict.
+    :return: None.
+    """
     logger = ctx.get("logger")
 
     redis = ctx.get("redis_client")
@@ -286,12 +346,12 @@ async def worker_shutdown(ctx: dict[str, Any]) -> None:
 
 async def run_llamator_job(ctx: dict[str, Any], payload: dict[str, Any]) -> dict[str, Any]:
     """
-    ARQ задача: выполнить LLAMATOR тестирование.
+    ARQ task: execute LLAMATOR test run.
 
-    :param ctx: Контекст worker-а.
-    :param payload: Полезная нагрузка (job_id и конфигурации).
-    :return: Результат (агрегированные метрики).
-    :raises Exception: Пробрасывает исключение для обработки worker-ом.
+    :param ctx: Worker context.
+    :param payload: Job payload (job_id and run configuration).
+    :return: Result dict (aggregated metrics).
+    :raises Exception: Re-raises execution exception to let ARQ handle it.
     """
     exec_ctx: _ExecutionContext = _ExecutionContext.from_ctx(ctx)
     executor: _JobExecutor = _JobExecutor(exec_ctx=exec_ctx)

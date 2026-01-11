@@ -3,37 +3,39 @@ from __future__ import annotations
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from pathlib import Path, PurePosixPath
+from datetime import datetime
+from datetime import timezone
+from pathlib import Path
+from pathlib import PurePosixPath
 from typing import Any
 
 from arq.connections import ArqRedis
-
 from llamator_mcp_server.config.settings import Settings
-from llamator_mcp_server.domain.models import (
-    BasicTestSpec,
-    CustomTestSpec,
-    JobStatus,
-    LlamatorRunConfig,
-    LlamatorTestRunRequest,
-    OpenAIClientConfig,
-    TestParameter,
-)
+from llamator_mcp_server.domain.models import BasicTestSpec
+from llamator_mcp_server.domain.models import CustomTestSpec
+from llamator_mcp_server.domain.models import JobStatus
+from llamator_mcp_server.domain.models import LlamatorRunConfig
+from llamator_mcp_server.domain.models import LlamatorTestRunRequest
+from llamator_mcp_server.domain.models import OpenAIClientConfig
+from llamator_mcp_server.domain.models import TestParameter
 from llamator_mcp_server.infra.job_store import JobStore
 
 
 def _utcnow() -> datetime:
     """
-    Получить текущий момент времени в UTC.
+    Return the current UTC time.
+
+    :return: Current datetime in UTC.
     """
     return datetime.now(timezone.utc)
 
 
 def _redact_client(cfg: OpenAIClientConfig) -> dict[str, Any]:
     """
-    Отфильтровать чувствительные данные клиента LLM для хранения/вывода.
+    Redact sensitive fields from a client configuration.
 
-    Заменяет секретные поля на маркеры или признаки их наличия.
+    :param cfg: Client configuration.
+    :return: Safe-to-store representation.
     """
     return {
         "kind": "openai",
@@ -47,14 +49,17 @@ def _redact_client(cfg: OpenAIClientConfig) -> dict[str, Any]:
 
 
 def _redact_request(
-    req: LlamatorTestRunRequest,
-    attack: OpenAIClientConfig,
-    judge: OpenAIClientConfig,
+        req: LlamatorTestRunRequest,
+        attack: OpenAIClientConfig,
+        judge: OpenAIClientConfig,
 ) -> dict[str, Any]:
     """
-    Отфильтровать конфиденциальные данные в запросе тестирования перед сохранением.
+    Redact secrets from a test run request before persisting.
 
-    Возвращает словарь с информацией о тестируемой модели, моделях-атакере/судье, конфигурации запуска и плане тестирования.
+    :param req: Original request.
+    :param attack: Attack model configuration.
+    :param judge: Judge model configuration.
+    :return: Safe-to-store request representation.
     """
     plan: dict[str, Any] = {
         "preset_name": req.plan.preset_name,
@@ -79,43 +84,52 @@ def _redact_request(
 
 def _build_attack_client(settings: Settings) -> OpenAIClientConfig:
     """
-    Build an attack model configuration from environment-backed settings.
+    Build attack model configuration from application settings.
 
     :param settings: Application settings.
-    :return: OpenAIClientConfig for attack LLM.
+    :return: OpenAIClientConfig for the attack model.
     :raises ValueError: If settings are invalid.
     """
     api_key_val: str | None = settings.attack_openai_api_key or None
     return OpenAIClientConfig(
-        api_key=api_key_val,
-        base_url=settings.attack_openai_base_url,
-        model=settings.attack_openai_model,
-        temperature=settings.attack_openai_temperature,
-        system_prompts=settings.attack_openai_system_prompts,
-        model_description=None,
+            api_key=api_key_val,
+            base_url=settings.attack_openai_base_url,
+            model=settings.attack_openai_model,
+            temperature=settings.attack_openai_temperature,
+            system_prompts=settings.attack_openai_system_prompts,
+            model_description=None,
     )
 
 
 def _build_judge_client(settings: Settings) -> OpenAIClientConfig:
     """
-    Build a judge model configuration from environment-backed settings.
+    Build judge model configuration from application settings.
 
     :param settings: Application settings.
-    :return: OpenAIClientConfig for judge LLM.
+    :return: OpenAIClientConfig for the judge model.
     :raises ValueError: If settings are invalid.
     """
     api_key_val: str | None = settings.judge_openai_api_key or None
     return OpenAIClientConfig(
-        api_key=api_key_val,
-        base_url=settings.judge_openai_base_url,
-        model=settings.judge_openai_model,
-        temperature=settings.judge_openai_temperature,
-        system_prompts=settings.judge_openai_system_prompts,
-        model_description=None,
+            api_key=api_key_val,
+            base_url=settings.judge_openai_base_url,
+            model=settings.judge_openai_model,
+            temperature=settings.judge_openai_temperature,
+            system_prompts=settings.judge_openai_system_prompts,
+            model_description=None,
     )
 
 
 def _resolve_artifacts_dir(settings: Settings, job_id: str, user_cfg: LlamatorRunConfig | None) -> Path:
+    """
+    Resolve a safe local artifacts directory for a job.
+
+    :param settings: Application settings.
+    :param job_id: Job identifier.
+    :param user_cfg: Optional user run configuration.
+    :return: Absolute local artifacts directory.
+    :raises ValueError: If artifacts_path attempts to escape the job directory.
+    """
     base: Path = (settings.artifacts_root / job_id).resolve(strict=False)
 
     if user_cfg is None or user_cfg.artifacts_path is None:
@@ -131,14 +145,17 @@ def _resolve_artifacts_dir(settings: Settings, job_id: str, user_cfg: LlamatorRu
 
 
 def _merge_run_config(
-    settings: Settings,
-    job_id: str,
-    user_cfg: LlamatorRunConfig | None,
+        settings: Settings,
+        job_id: str,
+        user_cfg: LlamatorRunConfig | None,
 ) -> dict[str, Any]:
     """
-    Объединить конфигурацию запуска от пользователя с настройками по умолчанию.
+    Merge user run configuration with defaults.
 
-    Формирует полную конфигурацию запуска LLAMATOR.
+    :param settings: Application settings.
+    :param job_id: Job identifier.
+    :param user_cfg: Optional user config.
+    :return: Effective LLAMATOR config dict.
     """
     effective: dict[str, Any] = {}
 
@@ -167,11 +184,11 @@ def _merge_run_config(
 @dataclass(frozen=True, slots=True)
 class SubmitResult:
     """
-    Результат постановки задания в очередь.
+    Result of submitting a job.
 
-    :param job_id: Идентификатор задания.
-    :param created_at: Время создания.
-    :param status: Статус.
+    :param job_id: Job identifier.
+    :param created_at: Creation time.
+    :param status: Current status.
     """
 
     job_id: str
@@ -181,12 +198,12 @@ class SubmitResult:
 
 class TestRunService:
     """
-    Сервис постановки LLAMATOR тестов в очередь.
+    Service responsible for submitting LLAMATOR test runs.
 
-    :param arq: ARQ Redis pool для enqueue_job.
-    :param store: Хранилище статусов заданий.
-    :param settings: Настройки приложения.
-    :param logger: Логгер.
+    :param arq: ARQ redis pool used to enqueue jobs.
+    :param store: Job store for persisting statuses/results.
+    :param settings: Application settings.
+    :param logger: Logger.
     """
 
     def __init__(self, arq: ArqRedis, store: JobStore, settings: Settings, logger: logging.Logger) -> None:
@@ -197,11 +214,11 @@ class TestRunService:
 
     async def submit(self, req: LlamatorTestRunRequest) -> SubmitResult:
         """
-        Поставить тестирование в очередь.
+        Submit a test run job.
 
-        :param req: Запрос на запуск.
-        :return: Результат постановки.
-        :raises ValueError: При некорректных входных данных.
+        :param req: Run request payload.
+        :return: SubmitResult.
+        :raises ValueError: If inputs are invalid.
         """
         job_id: str = uuid.uuid4().hex
 
@@ -229,11 +246,11 @@ class TestRunService:
 
 def validate_unique_param_names(params: tuple[TestParameter, ...]) -> None:
     """
-    Проверить уникальность имён параметров.
+    Validate uniqueness of parameter names.
 
-    :param params: Кортеж параметров.
-    :return: None
-    :raises ValueError: Если имена повторяются.
+    :param params: Test parameters tuple.
+    :return: None.
+    :raises ValueError: If parameter names are duplicated.
     """
     names: set[str] = set()
     for p in params:
@@ -243,16 +260,16 @@ def validate_unique_param_names(params: tuple[TestParameter, ...]) -> None:
 
 
 def validate_test_specs(
-    basic_tests: tuple[BasicTestSpec, ...] | None,
-    custom_tests: tuple[CustomTestSpec, ...] | None,
+        basic_tests: tuple[BasicTestSpec, ...] | None,
+        custom_tests: tuple[CustomTestSpec, ...] | None,
 ) -> None:
     """
-    Базовая валидация списков тестов.
+    Validate basic and custom test specs.
 
-    :param basic_tests: Список базовых тестов (может быть None).
-    :param custom_tests: Список пользовательских тестов (может быть None).
-    :return: None
-    :raises ValueError: Если параметры тестов некорректны (например, повторяются имена параметров).
+    :param basic_tests: Basic tests list (or None).
+    :param custom_tests: Custom tests list (or None).
+    :return: None.
+    :raises ValueError: If test parameters are invalid (e.g. duplicate names).
     """
     if basic_tests is not None:
         for t in basic_tests:

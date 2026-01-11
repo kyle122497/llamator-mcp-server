@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import logging
 from typing import Final
+
+import logging
 
 
 class _SuppressMcpClosedResourceErrorFilter(logging.Filter):
@@ -25,10 +26,10 @@ class _SuppressMcpClosedResourceErrorFilter(logging.Filter):
 
 def configure_logging(level: str) -> None:
     """
-    Настроить логирование приложения.
+    Configure application logging.
 
-    :param level: Уровень логирования (например, ``INFO``).
-    :return: None
+    :param level: Logging level (e.g. ``INFO``).
+    :return: None.
     """
     root: logging.Logger = logging.getLogger()
     lvl: str = level.upper()
@@ -41,8 +42,8 @@ def configure_logging(level: str) -> None:
         return
 
     formatter: logging.Formatter = logging.Formatter(
-        fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
-        datefmt="%Y-%m-%dT%H:%M:%S%z",
+            fmt="%(asctime)s %(levelname)s %(name)s %(message)s",
+            datefmt="%Y-%m-%dT%H:%M:%S%z",
     )
     handler: logging.StreamHandler = logging.StreamHandler()
     handler.setFormatter(formatter)

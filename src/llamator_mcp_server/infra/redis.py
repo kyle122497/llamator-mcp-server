@@ -10,9 +10,9 @@ from redis.asyncio import Redis
 @dataclass(frozen=True, slots=True)
 class RedisConfig:
     """
-    Нормализованная конфигурация Redis.
+    Normalized Redis configuration.
 
-    :param dsn: DSN Redis (redis://host:port/db).
+    :param dsn: Redis DSN (redis://host:port/db).
     """
 
     dsn: str
@@ -20,11 +20,11 @@ class RedisConfig:
 
 def parse_redis_settings(dsn: str) -> RedisSettings:
     """
-    Преобразовать DSN Redis в RedisSettings для ARQ.
+    Convert Redis DSN into ARQ RedisSettings.
 
-    :param dsn: Строка DSN.
-    :return: RedisSettings для ARQ.
-    :raises ValueError: Если DSN некорректен.
+    :param dsn: Redis DSN.
+    :return: RedisSettings for ARQ.
+    :raises ValueError: If DSN is invalid.
     """
     parsed = urlparse(dsn)
     if parsed.scheme not in ("redis", "rediss"):
@@ -40,20 +40,20 @@ def parse_redis_settings(dsn: str) -> RedisSettings:
         database = int(raw_db)
 
     return RedisSettings(
-        host=parsed.hostname,
-        port=parsed.port or 6379,
-        database=database,
-        password=parsed.password,
-        username=parsed.username,
-        ssl=(parsed.scheme == "rediss"),
+            host=parsed.hostname,
+            port=parsed.port or 6379,
+            database=database,
+            password=parsed.password,
+            username=parsed.username,
+            ssl=(parsed.scheme == "rediss"),
     )
 
 
 def create_redis_client(dsn: str) -> Redis:
     """
-    Создать asyncio Redis-клиент.
+    Create an asyncio Redis client.
 
-    :param dsn: DSN Redis.
-    :return: Redis клиент.
+    :param dsn: Redis DSN.
+    :return: Redis client.
     """
     return Redis.from_url(dsn, decode_responses=True)

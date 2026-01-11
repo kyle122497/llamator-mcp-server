@@ -1,6 +1,7 @@
+# llamator-mcp-server/pyproject.toml
 [tool.poetry]
 name = "llamator-mcp-server"
-version = "0.2.0"
+version = "0.3.0"
 description = "MCP server for LLAMATOR with ARQ/Redis task broker"
 authors = ["LLAMATOR Core Team"]
 readme = "README.md"
@@ -17,6 +18,7 @@ pydantic-settings = "^2.6.1"
 redis = "^5.2.0"
 uvicorn = { version = "^0.32.1", extras = ["standard"] }
 prometheus-fastapi-instrumentator = "^7.1.0"
+minio = "^7.2.10"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.3"

@@ -1,3 +1,4 @@
+# llamator-mcp-server/src/llamator_mcp_server/worker_settings.py
 from __future__ import annotations
 
 import asyncio
@@ -15,12 +16,12 @@ from llamator_mcp_server.config.settings import settings
 from llamator_mcp_server.domain.models import JobStatus
 from llamator_mcp_server.domain.models import OpenAIClientConfig
 from llamator_mcp_server.domain.models import TestPlan
-from llamator_mcp_server.infra.artifacts_storage import ArtifactsStorage
-from llamator_mcp_server.infra.artifacts_storage import S3ArtifactsStorage
+from llamator_mcp_server.domain.ports.artifacts_storage import ArtifactsStorage
 from llamator_mcp_server.infra.artifacts_storage import create_artifacts_storage
 from llamator_mcp_server.infra.job_store import JobStore
 from llamator_mcp_server.infra.llamator_runner import LlamatorRunner
 from llamator_mcp_server.infra.llamator_runner import ResolvedRun
+from llamator_mcp_server.infra.minio_artifacts_storage import MinioArtifactsStorage
 from llamator_mcp_server.infra.redis import create_redis_client
 from llamator_mcp_server.infra.redis import parse_redis_settings
 from llamator_mcp_server.utils.logging import LOGGER_NAME
@@ -67,16 +68,14 @@ class _ExecutionContext:
     logger: logging.Logger
     store: JobStore
     artifacts: ArtifactsStorage
-    artifacts_backend_resolved: str
 
     @classmethod
     def from_ctx(cls, ctx: dict[str, Any]) -> "_ExecutionContext":
         return cls(
-            settings=ctx["settings"],
-            logger=ctx["logger"],
-            store=ctx["store"],
-            artifacts=ctx["artifacts_storage"],
-            artifacts_backend_resolved=ctx["artifacts_backend_resolved"],
+                settings=ctx["settings"],
+                logger=ctx["logger"],
+                store=ctx["store"],
+                artifacts=ctx["artifacts_storage"],
         )
 
 
@@ -104,48 +103,43 @@ class _RunInputs:
         artifacts_root: Path = Path(str(run_config["artifacts_path"])).resolve(strict=False)
 
         return cls(
-            job_id=job_id,
-            attack_model=attack_model,
-            tested_model=tested_model,
-            judge_model=judge_model,
-            plan=plan,
-            run_config=run_config,
-            artifacts_root=artifacts_root,
+                job_id=job_id,
+                attack_model=attack_model,
+                tested_model=tested_model,
+                judge_model=judge_model,
+                plan=plan,
+                run_config=run_config,
+                artifacts_root=artifacts_root,
         )
 
     def to_resolved_run(self) -> ResolvedRun:
         return ResolvedRun(
-            job_id=self.job_id,
-            attack_model=self.attack_model,
-            tested_model=self.tested_model,
-            judge_model=self.judge_model,
-            plan=self.plan,
-            run_config=self.run_config,
-            artifacts_root=self.artifacts_root,
+                job_id=self.job_id,
+                attack_model=self.attack_model,
+                tested_model=self.tested_model,
+                judge_model=self.judge_model,
+                plan=self.plan,
+                run_config=self.run_config,
+                artifacts_root=self.artifacts_root,
         )
 
 
 class _ArtifactsLifecycle:
     """
     Job artifacts lifecycle operations: upload to backend and local cleanup.
-
-    Local cleanup is only performed for S3 backend because local backend may require
-    artifacts to remain accessible via filesystem.
     """
 
     def __init__(
-        self,
-        logger: logging.Logger,
-        artifacts: ArtifactsStorage,
-        job_id: str,
-        local_root: Path,
-        resolved_backend: str,
+            self,
+            logger: logging.Logger,
+            artifacts: ArtifactsStorage,
+            job_id: str,
+            local_root: Path,
     ) -> None:
         self._logger: logging.Logger = logger
         self._artifacts: ArtifactsStorage = artifacts
         self._job_id: str = job_id
         self._local_root: Path = local_root
-        self._resolved_backend: str = resolved_backend
 
     async def upload(self, job_status: str) -> bool:
         """
@@ -156,17 +150,17 @@ class _ArtifactsLifecycle:
         """
         try:
             self._logger.info(
-                f"Worker job_id={self._job_id} status=artifacts_uploading job_status={job_status} path={self._local_root}"
+                    f"Worker job_id={self._job_id} status=artifacts_uploading job_status={job_status} path={self._local_root}"
             )
             await self._artifacts.upload_job_artifacts(job_id=self._job_id, local_root=self._local_root)
             self._logger.info(
-                f"Worker job_id={self._job_id} status=artifacts_uploaded job_status={job_status} path={self._local_root}"
+                    f"Worker job_id={self._job_id} status=artifacts_uploaded job_status={job_status} path={self._local_root}"
             )
             return True
         except Exception as exc:
             self._logger.error(
-                f"Worker job_id={self._job_id} status=artifacts_upload_failed job_status={job_status} "
-                f"error={type(exc).__name__}: {exc}"
+                    f"Worker job_id={self._job_id} status=artifacts_upload_failed job_status={job_status} "
+                    f"error={type(exc).__name__}: {exc}"
             )
             return False
 
@@ -177,8 +171,6 @@ class _ArtifactsLifecycle:
         :param uploaded: Indicates whether upload succeeded.
         :return: None
         """
-        if self._resolved_backend != "s3":
-            return
         if not uploaded:
             return
 
@@ -189,8 +181,8 @@ class _ArtifactsLifecycle:
             return
         except Exception as exc:
             self._logger.warning(
-                f"Worker job_id={self._job_id} status=artifacts_local_cleanup_failed "
-                f"error={type(exc).__name__}: {exc}"
+                    f"Worker job_id={self._job_id} status=artifacts_local_cleanup_failed "
+                    f"error={type(exc).__name__}: {exc}"
             )
 
 
@@ -203,7 +195,6 @@ class _JobExecutor:
         self._logger: logging.Logger = exec_ctx.logger
         self._store: JobStore = exec_ctx.store
         self._artifacts: ArtifactsStorage = exec_ctx.artifacts
-        self._resolved_backend: str = exec_ctx.artifacts_backend_resolved
 
     async def execute(self, payload: dict[str, Any]) -> dict[str, Any]:
         job_id: str = str(payload["job_id"])
@@ -217,11 +208,10 @@ class _JobExecutor:
         try:
             inputs: _RunInputs = _RunInputs.from_payload(job_id=job_id, payload=payload)
             lifecycle = _ArtifactsLifecycle(
-                logger=self._logger,
-                artifacts=self._artifacts,
-                job_id=job_id,
-                local_root=inputs.artifacts_root,
-                resolved_backend=self._resolved_backend,
+                    logger=self._logger,
+                    artifacts=self._artifacts,
+                    job_id=job_id,
+                    local_root=inputs.artifacts_root,
             )
 
             resolved: ResolvedRun = inputs.to_resolved_run()
@@ -265,26 +255,15 @@ async def worker_startup(ctx: dict[str, Any]) -> None:
     await redis.ping()
 
     artifacts: ArtifactsStorage = create_artifacts_storage(
-        settings=settings,
-        presign_expires_seconds=15 * 60,
-        list_max_keys=1000,
+            settings=settings,
+            presign_expires_seconds=15 * 60,
+            list_max_keys=1000,
     )
+    if isinstance(artifacts, MinioArtifactsStorage):
+        await artifacts.ensure_ready()
 
-    resolved_backend: str = "local"
-    if isinstance(artifacts, S3ArtifactsStorage):
-        resolved_backend = "s3"
-
-    s3_configured: bool = all(
-        [
-            settings.s3_endpoint_url,
-            settings.s3_bucket,
-            settings.s3_access_key_id,
-            settings.s3_secret_access_key,
-        ]
-    )
     logger.info(
-        f"Artifacts backend initialized configured={settings.artifacts_backend} "
-        f"resolved={resolved_backend} s3_configured={s3_configured}"
+            f"Artifacts backend initialized provider=minio endpoint={settings.minio_endpoint_url} bucket={settings.minio_bucket}"
     )
 
     ctx["settings"] = settings
@@ -292,7 +271,6 @@ async def worker_startup(ctx: dict[str, Any]) -> None:
     ctx["redis_client"] = redis
     ctx["store"] = JobStore(redis=redis, ttl_seconds=settings.job_ttl_seconds)
     ctx["artifacts_storage"] = artifacts
-    ctx["artifacts_backend_resolved"] = resolved_backend
 
     logger.info("ARQ worker startup completed status=ready")
 

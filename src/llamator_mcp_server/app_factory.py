@@ -1,3 +1,4 @@
+# llamator-mcp-server/src/llamator_mcp_server/app_factory.py
 from __future__ import annotations
 
 import logging
@@ -13,8 +14,8 @@ from llamator_mcp_server.api.asgi_wrappers import _McpSseToJsonWrapper
 from llamator_mcp_server.api.http import build_router
 from llamator_mcp_server.api.mcp_server import build_mcp
 from llamator_mcp_server.config.settings import settings
-from llamator_mcp_server.infra.artifacts_storage import S3ArtifactsStorage
 from llamator_mcp_server.infra.artifacts_storage import create_artifacts_storage
+from llamator_mcp_server.infra.minio_artifacts_storage import MinioArtifactsStorage
 from llamator_mcp_server.infra.redis import create_redis_client
 from llamator_mcp_server.infra.redis import parse_redis_settings
 from llamator_mcp_server.utils.logging import LOGGER_NAME
@@ -52,22 +53,15 @@ def create_app() -> FastAPI:
             stack.push_async_callback(_close_arq_pool, arq_pool)
 
             artifacts = create_artifacts_storage(
-                settings=settings,
-                presign_expires_seconds=15 * 60,
-                list_max_keys=1000,
+                    settings=settings,
+                    presign_expires_seconds=15 * 60,
+                    list_max_keys=1000,
             )
-            resolved_backend: str = "s3" if isinstance(artifacts, S3ArtifactsStorage) else "local"
-            s3_configured: bool = all(
-                [
-                    settings.s3_endpoint_url,
-                    settings.s3_bucket,
-                    settings.s3_access_key_id,
-                    settings.s3_secret_access_key,
-                ]
-            )
+            if isinstance(artifacts, MinioArtifactsStorage):
+                await artifacts.ensure_ready()
+
             logger.info(
-                f"Artifacts backend initialized configured={settings.artifacts_backend} "
-                f"resolved={resolved_backend} s3_configured={s3_configured}"
+                    f"Artifacts backend initialized provider=minio endpoint={settings.minio_endpoint_url} bucket={settings.minio_bucket}"
             )
 
             app.state.settings = settings
@@ -90,10 +84,10 @@ def create_app() -> FastAPI:
             yield
 
     app = FastAPI(
-        title="llamator-mcp-server",
-        version="0.2.0",
-        lifespan=lifespan,
-        swagger_ui_parameters={"persistAuthorization": True},
+            title="llamator-mcp-server",
+            version="0.3.0",
+            lifespan=lifespan,
+            swagger_ui_parameters={"persistAuthorization": True},
     )
 
     # Prometheus metrics at /metrics

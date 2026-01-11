@@ -1,9 +1,11 @@
+# llamator-mcp-server/tests/integration/test_http_api.py
 from __future__ import annotations
 
 import time
 import urllib.parse
 from typing import Any
 
+from llamator_mcp_server.domain.models import ArtifactDownloadResponse
 from llamator_mcp_server.domain.models import JobStatus
 from llamator_mcp_server.domain.models import LlamatorJobInfo
 from llamator_mcp_server.domain.models import LlamatorTestRunResponse
@@ -16,10 +18,10 @@ from tests.conftest import ResponseReporter
 
 
 def _create_run(
-    http_client: HttpJsonClient,
-    headers: dict[str, str],
-    payload: dict[str, Any],
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+        reporter: ResponseReporter,
 ) -> LlamatorTestRunResponse:
     resp: ClientResponse = http_client.post_json("/v1/tests/runs", payload, headers=headers)
     reporter.http_call("http.create_run", "POST", "/v1/tests/runs", resp)
@@ -35,12 +37,12 @@ def _is_terminal_status(status: JobStatus) -> bool:
 
 
 def _wait_job_terminal(
-    http_client: HttpJsonClient,
-    headers: dict[str, str],
-    job_id: str,
-    timeout_s: float,
-    interval_s: float,
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        headers: dict[str, str],
+        job_id: str,
+        timeout_s: float,
+        interval_s: float,
+        reporter: ResponseReporter,
 ) -> LlamatorJobInfo:
     """
     Wait until a job transitions into a terminal state.
@@ -86,7 +88,7 @@ def _wait_job_terminal(
         time.sleep(float(interval_s))
 
     raise AssertionError(
-        f"Job did not finish within timeout job_id={job_id} last_status={last_info.status if last_info is not None else None}"
+            f"Job did not finish within timeout job_id={job_id} last_status={last_info.status if last_info is not None else None}"
     )
 
 
@@ -113,10 +115,10 @@ def test_health(http_client: HttpJsonClient, http_headers: dict[str, str], repor
 
 
 def test_create_run_and_get_status(
-    http_client: HttpJsonClient,
-    http_headers: dict[str, str],
-    minimal_run_request_payload: dict[str, Any],
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        http_headers: dict[str, str],
+        minimal_run_request_payload: dict[str, Any],
+        reporter: ResponseReporter,
 ) -> None:
     created: LlamatorTestRunResponse = _create_run(http_client, http_headers, minimal_run_request_payload, reporter)
     assert created.job_id
@@ -140,7 +142,7 @@ def test_create_run_and_get_status(
 
 
 def test_get_nonexistent_job_404(
-    http_client: HttpJsonClient, http_headers: dict[str, str], reporter: ResponseReporter
+        http_client: HttpJsonClient, http_headers: dict[str, str], reporter: ResponseReporter
 ) -> None:
     resp: ClientResponse = http_client.get("/v1/tests/runs/does-not-exist", headers=http_headers)
     reporter.http_call("http.get_run.404", "GET", "/v1/tests/runs/does-not-exist", resp)
@@ -148,10 +150,10 @@ def test_get_nonexistent_job_404(
 
 
 def test_list_artifacts_schema(
-    http_client: HttpJsonClient,
-    http_headers: dict[str, str],
-    minimal_run_request_payload: dict[str, Any],
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        http_headers: dict[str, str],
+        minimal_run_request_payload: dict[str, Any],
+        reporter: ResponseReporter,
 ) -> None:
     created: LlamatorTestRunResponse = _create_run(http_client, http_headers, minimal_run_request_payload, reporter)
 
@@ -173,10 +175,10 @@ def test_list_artifacts_schema(
 
 
 def test_download_artifact_rejects_path_traversal(
-    http_client: HttpJsonClient,
-    http_headers: dict[str, str],
-    minimal_run_request_payload: dict[str, Any],
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        http_headers: dict[str, str],
+        minimal_run_request_payload: dict[str, Any],
+        reporter: ResponseReporter,
 ) -> None:
     created: LlamatorTestRunResponse = _create_run(http_client, http_headers, minimal_run_request_payload, reporter)
 
@@ -187,9 +189,9 @@ def test_download_artifact_rejects_path_traversal(
 
 
 def test_create_run_validation_error_duplicate_param_names(
-    http_client: HttpJsonClient,
-    http_headers: dict[str, str],
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        http_headers: dict[str, str],
+        reporter: ResponseReporter,
 ) -> None:
     payload: dict[str, Any] = {
         "tested_model": {"kind": "openai", "base_url": "http://localhost:9999/v1", "model": "dummy"},
@@ -216,22 +218,22 @@ def test_create_run_validation_error_duplicate_param_names(
 
 
 def test_download_any_artifact_after_job_completion(
-    http_client: HttpJsonClient,
-    http_headers: dict[str, str],
-    minimal_run_request_payload: dict[str, Any],
-    it_config: IntegrationTestConfig,
-    capsys: Any,
-    reporter: ResponseReporter,
+        http_client: HttpJsonClient,
+        http_headers: dict[str, str],
+        minimal_run_request_payload: dict[str, Any],
+        it_config: IntegrationTestConfig,
+        capsys: Any,
+        reporter: ResponseReporter,
 ) -> None:
     created: LlamatorTestRunResponse = _create_run(http_client, http_headers, minimal_run_request_payload, reporter)
 
     final_info: LlamatorJobInfo = _wait_job_terminal(
-        http_client=http_client,
-        headers=http_headers,
-        job_id=created.job_id,
-        timeout_s=it_config.http_timeout_s,
-        interval_s=0.5,
-        reporter=reporter,
+            http_client=http_client,
+            headers=http_headers,
+            job_id=created.job_id,
+            timeout_s=it_config.http_timeout_s,
+            interval_s=0.5,
+            reporter=reporter,
     )
     assert _is_terminal_status(final_info.status)
 
@@ -264,19 +266,15 @@ def test_download_any_artifact_after_job_completion(
         return
 
     download_path: str = _artifact_download_path(created.job_id, first_path)
-    resp_dl: ClientResponse = http_client.get_no_redirect(download_path, headers=http_headers)
-
-    if resp_dl.status == 307:
-        reporter.http_redirect_location("http.download_artifact.after_completion", "GET", download_path, resp_dl)
-        url: str | None = resp_dl.headers.get("location")
-        assert (
-            url is not None and url.strip()
-        ), f"Expected Location header for 307 redirect job_id={created.job_id} path={first_path}"
-        with capsys.disabled():
-            reporter.section("ARTIFACT DOWNLOAD URL")
-            reporter.message(f"artifact_download_url={url}")
-        return
+    resp_dl: ClientResponse = http_client.get(download_path, headers=http_headers)
 
     reporter.http_call("http.download_artifact.after_completion", "GET", download_path, resp_dl)
     assert resp_dl.status == 200, f"download_artifact status={resp_dl.status} body={resp_dl.body[:200]!r}"
-    assert resp_dl.body, f"Expected non-empty artifact body job_id={created.job_id} path={first_path}"
+
+    payload_any2: Any = resp_dl.json()
+    reporter.http_json("http.download_artifact.after_completion.response", payload_any2)
+
+    parsed_link: ArtifactDownloadResponse = ArtifactDownloadResponse.model_validate(payload_any2)
+    assert parsed_link.job_id == created.job_id
+    assert parsed_link.path == first_path
+    assert parsed_link.download_url.strip()

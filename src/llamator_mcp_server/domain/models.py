@@ -1,3 +1,4 @@
+# llamator-mcp-server/src/llamator_mcp_server/domain/models.py
 from __future__ import annotations
 
 from datetime import datetime
@@ -210,7 +211,7 @@ class TestPlan(BaseModel):
     custom_tests: tuple[CustomTestSpec, ...] | None = None
 
     @model_validator(mode="after")
-    def _validate_plan(self) -> TestPlan:
+    def _validate_plan(self) -> "TestPlan":
         if self.num_threads is not None and self.num_threads < 1:
             raise ValueError("num_threads must be >= 1.")
         if self.preset_name is not None and not self.preset_name.strip():
@@ -330,6 +331,22 @@ class ArtifactsListResponse(BaseModel):
 
     job_id: str = Field(min_length=1, max_length=200, description="Job identifier.")
     files: list[ArtifactFileInfo] = Field(default_factory=list, description="Artifact files metadata list.")
+
+
+class ArtifactDownloadResponse(BaseModel):
+    """
+    Artifact download link response.
+
+    :param job_id: Job identifier.
+    :param path: Relative artifact path inside the job artifacts prefix.
+    :param download_url: Temporary presigned URL for downloading.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    job_id: str = Field(min_length=1, max_length=200, description="Job identifier.")
+    path: str = Field(min_length=1, max_length=4000, description="Relative path inside job artifacts prefix.")
+    download_url: str = Field(min_length=1, max_length=8000, description="Temporary presigned download URL.")
 
 
 class HealthResponse(BaseModel):

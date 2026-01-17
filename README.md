@@ -75,7 +75,7 @@ cp .env.example .env
 curl -sS -X POST "http://localhost:8000/v1/tests/runs"   -H "Content-Type: application/json"   -H "X-API-Key: <optional>"   -d '{
     "tested_model": {
       "kind": "openai",
-      "base_url": "http://host.docker.internal:1235/v1",
+      "base_url": "http://host.docker.internal:1234/v1",
       "model": "llm",
       "api_key": "lm-studio"
     },

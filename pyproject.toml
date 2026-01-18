@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "llamator-mcp-server"
-version = "0.3.0"
+version = "0.4.0"
 description = "MCP server for LLAMATOR with ARQ/Redis task broker"
 authors = ["Roman Neronov, Nikita Ivanov, Timur Nizamov"]
 readme = "README.md"

@@ -92,7 +92,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title="llamator-mcp-server",
-        version="0.3.0",
+        version="0.4.0",
         lifespan=lifespan,
         swagger_ui_parameters={"persistAuthorization": True},
     )

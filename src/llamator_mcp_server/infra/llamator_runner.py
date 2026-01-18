@@ -6,13 +6,10 @@ import logging
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
-from typing import Iterator
+from typing import Any, Iterator
 
 import llamator
-from llamator_mcp_server.domain.models import OpenAIClientConfig
-from llamator_mcp_server.domain.models import TestParameter
-from llamator_mcp_server.domain.models import TestPlan
+from llamator_mcp_server.domain.models import OpenAIClientConfig, TestParameter, TestPlan
 
 
 @dataclass(frozen=True, slots=True)

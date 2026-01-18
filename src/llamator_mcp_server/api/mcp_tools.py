@@ -5,6 +5,9 @@ import logging
 from typing import Any, Final
 
 from arq.connections import ArqRedis
+from mcp.server.fastmcp import FastMCP
+from redis.asyncio import Redis
+
 from llamator_mcp_server.api.schemas.mcp import LlamatorRunToolResponse
 from llamator_mcp_server.config.settings import Settings
 from llamator_mcp_server.domain.models import JobStatus, LlamatorJobInfo, LlamatorTestRunRequest
@@ -15,8 +18,6 @@ from llamator_mcp_server.domain.ports.artifacts_storage import (
 )
 from llamator_mcp_server.domain.services import TestRunService, validate_test_specs
 from llamator_mcp_server.infra.job_store import JobStore
-from mcp.server.fastmcp import FastMCP
-from redis.asyncio import Redis
 
 
 def _is_terminal_status(status: JobStatus) -> bool:
@@ -51,9 +52,9 @@ def _safe_log_request(req: LlamatorTestRunRequest) -> dict[str, Any]:
 
 
 async def _await_job_completion(
-        store: JobStore,
-        job_id: str,
-        timeout_seconds: int,
+    store: JobStore,
+    job_id: str,
+    timeout_seconds: int,
 ) -> LlamatorJobInfo:
     """
     Дождаться завершения задания (SUCCEEDED/FAILED), опрашивая JobStore.
@@ -104,9 +105,9 @@ def _extract_aggregated_or_empty(info: LlamatorJobInfo) -> dict[str, dict[str, i
 
 
 async def _try_get_artifacts_download_url(
-        artifacts: ArtifactsStorage,
-        job_id: str,
-        expires_seconds: int,
+    artifacts: ArtifactsStorage,
+    job_id: str,
+    expires_seconds: int,
 ) -> str | None:
     """
     Resolve artifacts archive download URL.
@@ -130,11 +131,11 @@ async def _try_get_artifacts_download_url(
 
 
 def build_mcp(
-        settings: Settings,
-        redis: Redis,
-        arq: ArqRedis,
-        logger: logging.Logger,
-        artifacts: ArtifactsStorage,
+    settings: Settings,
+    redis: Redis,
+    arq: ArqRedis,
+    logger: logging.Logger,
+    artifacts: ArtifactsStorage,
 ) -> FastMCP:
     """
     Построить MCP сервер с инструментами для запуска и мониторинга LLAMATOR.

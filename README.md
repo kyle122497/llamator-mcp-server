@@ -67,12 +67,23 @@ Typical local setup:
 cp .env.example .env
 ```
 
+Key configuration categories:
+
+- **Redis**: connection DSN for job queue and state storage.
+- **MinIO**: S3-compatible storage for artifacts.
+- **Attack/Judge models**: OpenAI-compatible endpoints for LLAMATOR execution.
+- **API security**: optional `X-API-Key` protection.
+- **Job execution**: timeouts, TTLs, and retry behavior.
+
 ## HTTP API usage
 
 ### Create a run
 
 ```bash
-curl -sS -X POST "http://localhost:8000/v1/tests/runs"   -H "Content-Type: application/json"   -H "X-API-Key: <optional>"   -d '{
+curl -sS -X POST "http://localhost:8000/v1/tests/runs" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <optional>" \
+  -d '{
     "tested_model": {
       "kind": "openai",
       "base_url": "http://host.docker.internal:1234/v1",
@@ -93,21 +104,31 @@ The response contains:
 ### Retrieve job state
 
 ```bash
-curl -sS "http://localhost:8000/v1/tests/runs/<job_id>"   -H "X-API-Key: <optional>"
+curl -sS "http://localhost:8000/v1/tests/runs/<job_id>" \
+  -H "X-API-Key: <optional>"
 ```
+
+Response includes:
+
+- `status`: current job state
+- `result`: aggregated metrics (when succeeded)
+- `error`: error details (when failed)
+- `error_notice`: compact user-facing error message (when failed)
 
 ### Artifacts
 
 List objects available for a job:
 
 ```bash
-curl -sS "http://localhost:8000/v1/tests/runs/<job_id>/artifacts"   -H "X-API-Key: <optional>"
+curl -sS "http://localhost:8000/v1/tests/runs/<job_id>/artifacts" \
+  -H "X-API-Key: <optional>"
 ```
 
 Resolve a presigned download URL for a specific object:
 
 ```bash
-curl -sS "http://localhost:8000/v1/tests/runs/<job_id>/artifacts/<path>"   -H "X-API-Key: <optional>"
+curl -sS "http://localhost:8000/v1/tests/runs/<job_id>/artifacts/<path>" \
+  -H "X-API-Key: <optional>"
 ```
 
 The download endpoint returns a JSON payload containing `download_url` and does not emit redirects.
@@ -121,6 +142,21 @@ Exposed tools:
 - `create_llamator_run`: submits a job, waits for completion, returns aggregated metrics and (if available) a presigned
   URL for `artifacts.zip`.
 - `get_llamator_run`: returns aggregated metrics for a finished job and the optional artifacts archive URL.
+
+Both tools return a consistent response schema:
+
+```json
+{
+  "job_id": "string",
+  "aggregated": {
+    "attack_name": {
+      "metric": 0
+    }
+  },
+  "artifacts_download_url": "string or null",
+  "error_notice": "string or null"
+}
+```
 
 Protocol notes, headers, and examples are documented in `DOCUMENTATION.md`.
 
@@ -148,6 +184,16 @@ Run the worker:
 ```bash
 arq llamator_mcp_server.worker_settings.WorkerSettings
 ```
+
+## Tutorial
+
+A Jupyter notebook with step-by-step examples is available at `notebooks/llamator_mcp_server_tutorial.ipynb`.
+It demonstrates:
+
+- HTTP API usage with curl
+- MCP JSON-RPC protocol interaction
+- Polling for job completion
+- Artifacts retrieval
 
 ## Tests
 

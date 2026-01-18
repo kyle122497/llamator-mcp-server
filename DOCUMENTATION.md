@@ -61,6 +61,11 @@ Responsibilities:
 - Upload artifacts to the storage backend.
 - Perform best-effort cleanup of local artifacts.
 
+Empty result handling:
+
+- If LLAMATOR returns an empty aggregated result (no tests executed), the job is marked as failed with error type
+  `EmptyAggregatedResultError`.
+
 ### Artifacts storage (MinIO)
 
 Responsibilities:
@@ -346,7 +351,10 @@ Persistence and redaction:
 Example:
 
 ```bash
-curl -sS -X POST "http://localhost:8000/v1/tests/runs"   -H "Content-Type: application/json"   -H "X-API-Key: <optional>"   -d '{
+curl -sS -X POST "http://localhost:8000/v1/tests/runs" \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: <optional>" \
+  -d '{
     "tested_model": {
       "kind": "openai",
       "base_url": "http://host.docker.internal:1234/v1",
@@ -383,7 +391,8 @@ Response:
         - `error_type`: string
         - `message`: string
         - `occurred_at`: ISO datetime (UTC)
-    - `error_notice`: optional compact user-facing string
+    - `error_notice`: optional compact user-facing string (format: `error_type: message` or `error_type` if message is
+      empty)
 
 Errors:
 
@@ -488,16 +497,23 @@ Input:
 
 - `req`: `LlamatorTestRunRequest`
 
-Output keys:
+Output schema (`LlamatorRunToolResponse`):
 
-- `job_id`: string
-- `aggregated`: dict[str, dict[str, int]] (empty on failure)
+- `job_id`: string (uuid4 hex, 32 characters)
+- `aggregated`: dict[str, dict[str, int]] (empty dict `{}` on failure)
 - `artifacts_download_url`: string or null (presigned link for `artifacts.zip` if available)
-- `error_notice`: string or null
+- `error_notice`: string or null (user-facing error message if job failed)
 
 Timeout:
 
 - Wait limit is `LLAMATOR_MCP_RUN_TIMEOUT_SECONDS`.
+
+Error conditions:
+
+- `ValueError`: Invalid request payload or test specifications.
+- `TimeoutError`: Job did not complete within the configured timeout.
+- `KeyError`: Job not found in store (should not occur in normal flow).
+- `RuntimeError`: Job succeeded but result is missing (internal inconsistency).
 
 #### get_llamator_run
 
@@ -509,7 +525,7 @@ Input:
 
 - `job_id`: string
 
-Output keys:
+Output schema (`LlamatorRunToolResponse`):
 
 - `job_id`: string
 - `aggregated`: dict[str, dict[str, int]]
@@ -518,8 +534,9 @@ Output keys:
 
 Error conditions:
 
-- If the job does not exist, the server-side tool handler fails with a KeyError.
-- If the job is not terminal, the server-side tool handler fails with a ValueError.
+- `KeyError`: Job does not exist.
+- `ValueError`: Job is not in a terminal state (still queued or running).
+- `RuntimeError`: Job succeeded but result is missing (internal inconsistency).
 
 ## Artifacts
 
@@ -553,6 +570,11 @@ Local cleanup:
 
 - If upload succeeds, the worker deletes the local job directory.
 
+Upload timing:
+
+- Artifacts are uploaded regardless of job success or failure.
+- Upload occurs before job state is persisted to Redis to ensure artifacts availability.
+
 ### Retention behavior
 
 MinIO retention:
@@ -574,3 +596,27 @@ Endpoint:
 Purpose:
 
 - Expose Prometheus metrics via `prometheus_fastapi_instrumentator`.
+
+## Error handling
+
+### Job failure scenarios
+
+Jobs can fail for several reasons:
+
+1. **Empty aggregated result**: LLAMATOR executed but no tests ran (e.g., unreachable tested model, invalid preset).
+   Error type: `EmptyAggregatedResultError`.
+
+2. **LLAMATOR execution error**: Exception raised during `llamator.start_testing()`. Error type matches the exception
+   class name.
+
+3. **Validation error**: Invalid job payload structure or values. Error type matches the validation exception.
+
+### Error notice format
+
+The `error_notice` field provides a compact user-facing message:
+
+- Format: `{error_type}: {message}` when message is non-empty.
+- Format: `{error_type}` when message is empty.
+
+This field is available in both HTTP API (`LlamatorJobInfo.error_notice`) and MCP tool responses
+(`LlamatorRunToolResponse.error_notice`).

